@@ -1,4 +1,5 @@
-# GroupAD
+# GroupAD.jl
+Generative Anomaly Detection for Multiple Instance Learning problems. Inspired by [GenerativeAD.jl](https://github.com/aicenter/GenerativeAD.jl).
 
 This code base is using the Julia Language and [DrWatson](https://juliadynamics.github.io/DrWatson.jl/stable/)
 to make a reproducible scientific project named
