@@ -129,17 +129,8 @@ function load_data(dataset::String, ratios=(0.6,0.2,0.2); seed=nothing,
 	method="leave-one-out", contamination::Real=0.0, kwargs...)
 
 	# extract data and labels
-	if dataset in uci_datasets # UCI Loda data, standardized
-		data_normal, data_anomalous = load_uci_data(dataset; kwargs...)
-	elseif dataset in mldatasets # MNIST,FMNIST, SVHN2, CIFAR10
-		data_normal, data_anomalous = load_mldatasets_data(dataset; kwargs...)
-	elseif dataset in other_datasets
-		data_normal, data_anomalous = load_other_data(dataset; standardize=true, kwargs...)
-	else
-		error("Dataset $(dataset) not known, either not implemented or misspeled.")
-		# TODO add the rest
-	end
-
+	data_normal, data_anomalous = load_mill_data(dataset; kwargs...)
+	
 	# now do the train/validation/test split
 	if method=="leave-one-in"
 		return train_val_test_split(data_anomalous, data_normal, ratios; seed=seed, method=method, contamination=ratios[1])
