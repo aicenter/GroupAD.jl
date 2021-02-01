@@ -171,8 +171,7 @@ end
 Returns 3 tuples of (data, labels) representing train/validation/test part. Arguments are the splitting
 ratios for normal data, seed and training data contamination.
 
-For a list of available datasets, check `GenerativeAD.Datasets.uci_datasets`, `GenerativeAD.Datasets.other_datasets`
-and `GenerativeAD.Datasets.mldatasets`.
+For a list of available datasets, do `readdir(GroupAD.get_mill_datapath())`.
 """
 function load_data(dataset::String, ratios=(0.6,0.2,0.2); seed=nothing, 
 	contamination::Real=0.0, kwargs...)

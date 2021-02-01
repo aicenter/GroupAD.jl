@@ -149,9 +149,9 @@ version = "0.7.6"
 
 [[DataFrames]]
 deps = ["CategoricalArrays", "Compat", "DataAPI", "Future", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrettyTables", "Printf", "REPL", "Reexport", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
-git-tree-sha1 = "b46e1deb4592a5df7416b10dfcd6b01fb194ab9a"
+git-tree-sha1 = "b0db5579803eabb33f1274ca7ca2f472fdfb7f2a"
 uuid = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-version = "0.22.2"
+version = "0.22.5"
 
 [[DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
@@ -184,6 +184,12 @@ git-tree-sha1 = "214c3fcac57755cfda163d91c58893a8723f93e9"
 uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
 version = "1.0.2"
 
+[[Distances]]
+deps = ["LinearAlgebra", "Statistics"]
+git-tree-sha1 = "366715149014943abd71aa647a07a43314158b2d"
+uuid = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
+version = "0.10.2"
+
 [[Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
@@ -199,6 +205,12 @@ deps = ["Dates", "FileIO", "LibGit2", "Pkg", "Random", "Requires", "UnPack"]
 git-tree-sha1 = "026cfaa2341860e7436256b8272d73d4f91a5c18"
 uuid = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
 version = "1.16.6"
+
+[[EvalMetrics]]
+deps = ["DocStringExtensions", "RecipesBase", "Reexport", "Statistics", "StatsBase"]
+git-tree-sha1 = "08edf9183b70a0a8c075e6bb855561967c84abac"
+uuid = "251d5f9e-10c1-4699-ba24-e0ad168fa3e4"
+version = "0.2.1"
 
 [[ExprTools]]
 git-tree-sha1 = "10407a39b87f29d47ebaca8edbc75d7c302ff93e"
@@ -439,6 +451,12 @@ git-tree-sha1 = "bfe47e760d60b82b66b61d2d44128b62e3a369fb"
 uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 version = "0.3.5"
 
+[[NearestNeighbors]]
+deps = ["Distances", "StaticArrays"]
+git-tree-sha1 = "9afd724797039125e8e2cc362098f01dab60bc3a"
+uuid = "b8a86587-4115-5ab1-83bc-aa920d37bbce"
+version = "0.4.8"
+
 [[OffsetArrays]]
 deps = ["Adapt"]
 git-tree-sha1 = "6247fe4b373b354b9b7fc155ae9c137267c9a07f"
@@ -493,6 +511,11 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 [[Random]]
 deps = ["Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[[RecipesBase]]
+git-tree-sha1 = "b3fb709f3c97bfc6e948be68beeecb55a0b340ae"
+uuid = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
+version = "1.1.1"
 
 [[Reexport]]
 deps = ["Pkg"]
@@ -619,6 +642,12 @@ version = "1.0.2"
 
 [[Unicode]]
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
+
+[[ValueHistories]]
+deps = ["DataStructures", "RecipesBase"]
+git-tree-sha1 = "9cc583107e0c09b8986ac10660653fa2e37c0f62"
+uuid = "98cad3c8-aec3-5f06-8e41-884608649ab7"
+version = "0.5.4"
 
 [[VectorizationBase]]
 deps = ["ArrayInterface", "Hwloc", "IfElse", "Libdl", "LinearAlgebra"]

@@ -12,5 +12,6 @@ using DataDeps
 
 include("data.jl")
 include("experiments.jl")
+include("models/Models.jl")
 
 end #module
