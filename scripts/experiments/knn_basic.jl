@@ -88,8 +88,6 @@ edit_params = GroupAD.edit_params
 
 ####################################################################
 ################ THIS PART IS COMMON FOR ALL MODELS ################
-# set a maximum for parameter sampling retries
-# only execute this if run directly - so it can be included in other files
 if abspath(PROGRAM_FILE) == @__FILE__
 	GroupAD.basic_experimental_loop(
 		sample_params, 

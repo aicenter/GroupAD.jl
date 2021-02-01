@@ -102,12 +102,17 @@ function basic_experimental_loop(sample_params_f, fit_f, edit_params_f,
 
 				# save the model separately			
 				if training_info.model != nothing
-					tagsave(joinpath(_savepath, savename("model", edited_parameters, "bson", digits=5)), 
+					modelf = joinpath(_savepath, savename("model", edited_parameters, "bson", digits=5))
+					tagsave(
+						modelf, 
 						Dict("model"=>training_info.model,
 							"fit_t"=>training_info.fit_t,
 							"history"=>training_info.history,
 							"parameters"=>edited_parameters
-							), safe = true)
+							), 
+						safe = true)
+					(@info "Model saved to $modelf")
+
 					training_info = merge(training_info, (model = nothing,history=nothing))
 				end
 

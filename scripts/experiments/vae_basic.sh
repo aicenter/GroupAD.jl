@@ -10,4 +10,4 @@ CONTAMINATION=$3
 module load Julia/1.5.1-linux-x86_64
 module load Python/3.8.2-GCCcore-9.3.0
 
-julia ./knn_basic.jl ${MAX_SEED} $DATASET $CONTAMINATION
+julia ./vae_basic.jl ${MAX_SEED} $DATASET $CONTAMINATION
