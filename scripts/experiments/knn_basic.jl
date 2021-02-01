@@ -17,9 +17,13 @@ s = ArgParseSettings()
         default = "Fox"
         arg_type = String
         help = "dataset"
+   "contamination"
+        default = 0.0
+        arg_type = Float64
+        help = "training data contamination rate"
 end
 parsed_args = parse_args(ARGS, s)
-@unpack dataset, max_seed = parsed_args
+@unpack dataset, max_seed, contamination = parsed_args
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
@@ -74,49 +78,27 @@ function fit(data, parameters)
 	end
 	training_info, [(x -> knn_predict(model, x, v), merge(parameters, (distance = v,))) for v in [:gamma, :kappa, :delta]]
 end
+"""
+	edit_params(data, parameters)
+
+This function edits the sampled parameters based on nature of data - e.g. dimensions etc. Default
+behaviour is doing nothing.
+""" 
+edit_params = GroupAD.edit_params
 
 ####################################################################
 ################ THIS PART IS COMMON FOR ALL MODELS ################
 # set a maximum for parameter sampling retries
 # only execute this if run directly - so it can be included in other files
 if abspath(PROGRAM_FILE) == @__FILE__
-	try_counter = 0
-	max_tries = 10*max_seed
-	while try_counter < max_tries
-	    parameters = sample_params()
-
-	    for seed in 1:max_seed
-			savepath = datadir("experiments/$(modelname)/$(dataset)/seed=$(seed)")
-			mkpath(savepath)
-
-			# get data
-			data = GroupAD.load_data(dataset, seed=seed)
-			# first convert the aggregation string to a function
-			agf = getfield(StatsBase, Symbol(parameters.aggregation))
-			# now aggregate the data - bags into vectors
-			data = GroupAD.Models.aggregate(data, agf)
-			
-			# edit parameters
-			edited_parameters = GroupAD.edit_params(data, parameters)
-			
-			@info "Trying to fit $modelname on $dataset with parameters $(edited_parameters)..."
-			# check if a combination of parameters and seed alread exists
-			if GroupAD.check_params(savepath, edited_parameters)
-				# fit
-				training_info, results = fit(data, edited_parameters)
-				# here define what additional info should be saved together with parameters, scores, labels and predict times
-				save_entries = merge(training_info, (modelname = modelname, seed = seed, dataset = dataset))
-
-				# now loop over all anomaly score funs
-				for result in results
-					GroupAD.experiment(result..., data, savepath; save_entries...)
-				end
-				global try_counter = max_tries + 1
-			else
-				@info "Model already present, trying new hyperparameters..."
-				global try_counter += 1
-			end
-		end
-	end
-	(try_counter == max_tries) ? (@info "Reached $(max_tries) tries, giving up.") : nothing
+	GroupAD.basic_experimental_loop(
+		sample_params, 
+		fit, 
+		edit_params, 
+		max_seed, 
+		modelname, 
+		dataset, 
+		contamination, 
+		datadir("experiments/contamination-$(contamination)")
+		)
 end

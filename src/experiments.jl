@@ -64,3 +64,66 @@ function check_params(savepath, parameters)
 	end
 	true
 end
+
+function basic_experimental_loop(sample_params_f, fit_f, edit_params_f, 
+		max_seed, modelname, dataset, contamination, savepath)
+	# set a maximum for parameter sampling retries
+	try_counter = 0
+	max_tries = 10*max_seed
+	while try_counter < max_tries
+	    parameters = sample_params_f()
+
+	    for seed in 1:max_seed
+			_savepath = joinpath(savepath, "$(modelname)/$(dataset)/seed=$(seed)")
+			mkpath(_savepath)
+
+			# get data
+			data = load_data(dataset, seed=seed, contamination=contamination)
+			
+			# if needed, aggregate the data
+			if :aggregation in keys(parameters)
+				# first convert the aggregation string to a function
+				agf = getfield(StatsBase, Symbol(parameters.aggregation))
+				# now aggregate the data - bags into vectors
+				data = Models.aggregate(data, agf)
+			end
+									
+			# edit parameters
+			edited_parameters = edit_params_f(data, parameters)
+			
+			@info "Trying to fit $modelname on $dataset with parameters $(edited_parameters)..."
+			@info "Train/validation/test splits: $(size(data[1][1], 2)) | $(size(data[2][1], 2)) | $(size(data[3][1], 2))"
+			@info "Number of features: $(size(data[1][1], 1))"
+
+			# check if a combination of parameters and seed alread exists
+			if check_params(_savepath, edited_parameters)
+				# fit
+				training_info, results = fit_f(data, edited_parameters)
+
+				# save the model separately			
+				if training_info.model != nothing
+					tagsave(joinpath(_savepath, savename("model", edited_parameters, "bson", digits=5)), 
+						Dict("model"=>training_info.model,
+							"fit_t"=>training_info.fit_t,
+							"history"=>training_info.history,
+							"parameters"=>edited_parameters
+							), safe = true)
+					training_info = merge(training_info, (model = nothing,history=nothing))
+				end
+
+				# here define what additional info should be saved together with parameters, scores, labels and predict times
+				save_entries = merge(training_info, (modelname = modelname, seed = seed, dataset = dataset))
+
+				# now loop over all anomaly score funs
+				for result in results
+					experiment(result..., data, _savepath; save_entries...)
+				end
+				try_counter = max_tries + 1
+			else
+				@info "Model already present, trying new hyperparameters..."
+				try_counter += 1
+			end
+		end
+	end
+	(try_counter == max_tries) ? (@info "Reached $(max_tries) tries, giving up.") : nothing
+end
