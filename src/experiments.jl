@@ -1,5 +1,8 @@
+Base.size(x::Mill.BagNode,args...) = size(x.data.data, args...)
+
 """
 	experiment(score_fun, parameters, data, savepath; save_entries...)
+
 Eval score function on test/val/train data and save.
 """
 function experiment(score_fun, parameters, data, savepath; verb=true, save_result=true, save_entries...)
@@ -65,29 +68,35 @@ function check_params(savepath, parameters)
 	true
 end
 
+"""
+	basic_experimental_loop(sample_params_f, fit_f, edit_params_f, 
+		max_seed, modelname, dataset, contamination, savepath)
+
+This function takes a function that samples parameters, a fit function and a function that edits the sampled
+parameters and other parameters. Then it loads data, samples hyperparameters, calls the fit function
+that is supposed to construct and fit a model and finally evaluates the returned score functions on 
+the loaded data.
+"""
 function basic_experimental_loop(sample_params_f, fit_f, edit_params_f, 
 		max_seed, modelname, dataset, contamination, savepath)
 	# set a maximum for parameter sampling retries
+	# this is here because you might sample the same parameters of an already trained model
+	# in that case this loop runs again, for a total of 10 tries
 	try_counter = 0
 	max_tries = 10*max_seed
 	while try_counter < max_tries
+		# sample the random hyperparameters
 	    parameters = sample_params_f()
 
+	    # with these hyperparameters, train and evaluate the model on different train/val/tst splits
 	    for seed in 1:max_seed
+	    	# define where data is going to be saved
 			_savepath = joinpath(savepath, "$(modelname)/$(dataset)/seed=$(seed)")
 			mkpath(_savepath)
 
 			# get data
 			data = load_data(dataset, seed=seed, contamination=contamination)
-			
-			# if needed, aggregate the data
-			if :aggregation in keys(parameters)
-				# first convert the aggregation string to a function
-				agf = getfield(StatsBase, Symbol(parameters.aggregation))
-				# now aggregate the data - bags into vectors
-				data = Models.aggregate(data, agf)
-			end
-									
+											
 			# edit parameters
 			edited_parameters = edit_params_f(data, parameters)
 			

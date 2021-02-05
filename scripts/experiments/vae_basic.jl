@@ -28,7 +28,7 @@ parsed_args = parse_args(ARGS, s)
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
-modelname = "vae"
+modelname = "vae_basic"
 # sample parameters, should return a Dict of model kwargs 
 """
 	sample_params()
@@ -69,6 +69,11 @@ function fit(data, parameters)
 	# construct model - constructor should only accept kwargs
 	model = GroupAD.Models.vae_constructor(;idim=size(data[1][1],1), parameters...)
 
+	# aggregate bags into vectors
+	# first convert the aggregation string to a function
+	agf = getfield(StatsBase, Symbol(parameters.aggregation))
+	data = GroupAD.Models.aggregate(data, agf)
+
 	# fit train data
 	try
 		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=82800/max_seed, 
@@ -87,15 +92,15 @@ function fit(data, parameters)
 		model = info.model
 		)
 
-	# now return the different scoring functions
+	# now return the infor to be saved and an array of tuples (anomaly score function, hyperparatemers)
 	L=100
 	batchsize=512
 	training_info, [
-		(x -> GroupAD.Models.batched_score(info.model,GroupAD.Models.reconstruction_score,x,batchsize), 
+		(x -> GroupAD.Models.reconstruction_score(info.model,x,agf), 
 			merge(parameters, (score = "reconstruction",))),
-		(x -> GroupAD.Models.batched_score(info.model,GroupAD.Models.reconstruction_score_mean, x, batchsize), 
+		(x -> GroupAD.Models.reconstruction_score_mean(info.model,x,agf), 
 			merge(parameters, (score = "reconstruction-mean",))),
-		(x -> GroupAD.Models.batched_score(info.model, GroupAD.Models.reconstruction_score, x, batchsize, L), 
+		(x -> GroupAD.Models.reconstruction_score(info.model,x,agf,L), 
 			merge(parameters, (score = "reconstruction-sampled", L=L)))		
 	]
 end
@@ -104,10 +109,10 @@ end
 	edit_params(data, parameters)
 
 This function edits the sampled parameters based on nature of data - e.g. dimensions etc. Default
-behaviour is doing nothing.
+behaviour is doing nothing - then used `GroupAD.edit_params`.
 """ 
 function edit_params(data, parameters)
-	idim = size(data[1][1],1)
+	idim = size(data[1][1].data.data,1)
 	# put the largest possible zdim where zdim < idim, the model tends to converge poorly if the latent dim is larger than idim
 	if parameters.zdim >= idim
 		zdims = 2 .^(1:8)

@@ -50,6 +50,11 @@ function fit(data, parameters)
 	# construct model - constructor should only accept kwargs
 	model = GroupAD.Models.knn_constructor(;v=:kappa, parameters...)
 
+	# aggregate bags into vectors
+	# first convert the aggregation string to a function
+	agf = getfield(StatsBase, Symbol(parameters.aggregation))
+	data = GroupAD.Models.aggregate(data, agf)
+
 	# fit train data
 	try
 		global info, fit_t, _, _, _ = @timed fit!(model, data[1][1])
@@ -66,8 +71,9 @@ function fit(data, parameters)
 
 	# now return the different scoring functions
 	function knn_predict(model, x, v::Symbol)
+		_x = GroupAD.Models.aggregate(x, agf)
 		try 
-			return predict(model, x, v)
+			return predict(model, _x, v)
 		catch e
 			if isa(e, ArgumentError) # this happens in the case when k > number of points
 				return NaN # or nothing?

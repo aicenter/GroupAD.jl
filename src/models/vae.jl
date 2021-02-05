@@ -164,3 +164,162 @@ function StatsBase.fit!(model::VAE, data::Tuple, loss::Function; max_iters=10000
 	# again, this is not optimal, the model should be passed by reference and only the reference should be edited
 	(history=history, iterations=i, model=model, npars=sum(map(p->length(p), Flux.params(model))))
 end
+
+# anomaly score functions
+"""
+	reconstruct(model::VAE, x)
+
+Data reconstruction.
+"""
+reconstruct(model::VAE, x) = mean(model.decoder, rand(model.encoder, x))
+
+"""
+	generate(model::VAE, N::Int[, outdim])
+
+Data generation. Support output dimension if the output needs to be reshaped, e.g. in convnets.
+"""
+generate(model::VAE, N::Int) = mean(model.decoder, rand(model.prior, N))
+generate(model::VAE, N::Int, outdim) = reshape(generate(model, N), outdim..., :)
+
+"""
+	encode_mean(model::VAE, x)
+
+Produce data encodings.
+"""
+encode_mean(model::VAE, x) = mean(model.encoder, x)
+
+"""
+	reconstruction_score(model::VAE, x::AbstractArray{T,2}[, L=1])
+	reconstruction_score(model::VAE, x::Mill.BagNode, agf::Function[, L=1])
+
+Anomaly score based on the reconstruction probability of the data. Support an aggregation function
+in case x is a BagNode.
+"""
+function reconstruction_score(model::VAE, x::AbstractArray{T,2}) where T 
+	p = condition(model.decoder, rand(model.encoder, x))
+	-logpdf(p, x)
+end
+function reconstruction_score(model::VAE, x::AbstractArray{T,2}, L::Int) where T
+	mean([reconstruction_score(model, x) for _ in 1:L])
+end
+function reconstruction_score(model::VAE, x::Mill.BagNode, agf::Function, args...)
+	# aggregate x - bags to vectors
+	_x = aggregate(x, agf)
+	return reconstruction_score(model, _x, args...)
+end
+
+"""
+	reconstruction_score_mean(model::VAE, x)
+	reconstruction_score_mean(model::VAE, x::Mill.BagNode, agf)
+
+Anomaly score based on the reconstruction probability of the data. Uses mean of encoding. 
+Support an aggregation function in case x is a BagNode.
+"""
+function reconstruction_score_mean(model::VAE, x::AbstractArray{T,2}) where T 
+	p = condition(model.decoder, mean(model.encoder, x))
+	-logpdf(p, x)
+end
+function reconstruction_score_mean(model::VAE, x::Mill.BagNode, agf::Function)
+	# aggregate x - bags to vectors
+	_x = aggregate(x, agf)
+	reconstruction_score_mean(model, _x)
+end
+
+"""
+	latent_score(model::VAE, x[, L=1]) 
+	latent_score(model::VAE, x::Mill.BagNode, agf::Function[, L=1])
+
+Anomaly score based on the similarity of the encoded data and the prior.
+"""
+function latent_score(model::VAE, x::AbstractArray{T,2}) where T 
+	z = rand(model.encoder, x)
+	-logpdf(model.prior, z)
+end
+latent_score(model::VAE, x::AbstractArray{T,2}, L::Int) where T = 
+	mean([latent_score(model, x) for _ in 1:L])
+function latent_score(model::VAE, x::Mill.BagNode, agf::Function, args...)
+	# aggregate x - bags to vectors
+	_x = aggregate(x, agf)
+	latent_score(model, _x, args...)
+end
+
+"""
+	latent_score_mean(model::VAE, x) 
+	latent_score_mean(model::VAE, x::Mill.BagNode, agf::Function)
+
+Anomaly score based on the similarity of the encoded data and the prior. Uses mean of encoding.
+"""
+function latent_score_mean(model::VAE, x::AbstractArray{T,2}) where T 
+	z = mean(model.encoder, x)
+	-logpdf(model.prior, z)
+end
+function latent_score_mean(model::VAE, x::Mill.BagNode, agf::Function)
+	# aggregate x - bags to vectors
+	_x = aggregate(x, agf)
+	latent_score_mean(model, _x)
+end
+
+"""
+	batched_score(model,score,x,L,batchsize)
+
+Batched score for large datasets.
+"""
+batched_score(model,score,x,batchsize,args...) = 
+	vcat(map(y-> Base.invokelatest(score, model, y, args...), Flux.Data.DataLoader(x, batchsize=batchsize))...)
+
+
+# JacoDeco score
+# see https://arxiv.org/abs/1905.11890
+"""
+	jacobian(f, x)
+
+Jacobian of f given due to x.
+"""
+function jacobian(f, x)
+	y = f(x)
+	n = length(y)
+	m = length(x)
+	T = eltype(y)
+	j = Array{T, 2}(undef, n, m)
+	for i in 1:n
+		j[i, :] .= gradient(x -> f(x)[i], x)[1]
+	end
+	return j
+end
+
+"""
+	lJacoD(m,x)
+
+Jacobian decomposition JJ(m,x).
+"""
+function lJacoD(m,x)
+	JJ = zeros(eltype(x),size(x,ndims(x)));
+	zg = mean(m.encoder,x);
+	for i=1:size(x,ndims(x))
+		jj,J = jacobian(y->mean(m.decoder,reshape(y,:,1))[:],zg[:,i]);
+		(U,S,V) = svd(J);
+		JJ[i]= sum(2*log.(S));
+	end
+	JJ
+end
+
+"""
+	lpx(m,x)
+
+p(x|g(x))
+"""
+lpx(m,x) = logpdf(m.decoder,x,mean(m.encoder,x))
+
+"""
+	lpz(m,x)
+
+p(z|e(x))
+"""
+lpz(m,x) = logpdf(m.prior,mean(m.encoder,x)) # 
+
+"""
+	lp_orthD(m,x)
+
+JacoDeco score: p(x|g(x)) + p(z|e(x)) - JJ(m,x)
+"""
+jacodeco(m,x) = (lpx(m,x) .+ lpz(m,x) .- lJacoD(m,x));
