@@ -177,8 +177,13 @@ function load_data(dataset::String, ratios=(0.6,0.2,0.2); seed=nothing,
 	contamination::Real=0.0, kwargs...)
 
 	# extract data and labels
-	data_normal, data_anomalous = load_mill_data(dataset; kwargs...)
+	if dataset == "mnist"
+		return MNIST_train_test(2)
+	else
+		data_normal, data_anomalous = load_mill_data(dataset; kwargs...)
+		return train_val_test_split(data_normal, data_anomalous, ratios; seed=seed, contamination=contamination)
+	end
 	
 	# now do the train/validation/test split
-	return train_val_test_split(data_normal, data_anomalous, ratios; seed=seed, contamination=contamination)
+	
 end

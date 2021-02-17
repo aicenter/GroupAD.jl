@@ -10,14 +10,6 @@ using StatsBase
 using Random
 
 """
-	safe_softplus(x::T)
-
-Safe version of softplus.	
-"""
-safe_softplus(x::T) where T  = softplus(x) + T(0.000001)
-
-
-"""
     statistician_constructor(;idim::Int,hdim::Int,vdim::Int,cdim::Int,zdim::Int,
         nlayers::Int=3,activation::String="relu",init_seed=nothing)
 
@@ -96,6 +88,30 @@ function unpack_mill(dt)
 end
 
 
+"""
+    RandomBagBatches(data;batchsize::Int=32,randomize=false)
+
+Creates random batch for bag data which are an array of
+arrays.
+"""
+function RandomBagBatches(data;batchsize::Int=32,randomize=false)
+    l = length(data)
+	if batchsize > l
+		return data
+	end
+    idx = sample(1:l-batchsize)
+    if randomize
+        return shuffle(data)[idx:idx+batchsize-1]
+    else
+        return data[idx:idx+batchsize-1]
+    end
+end
+
+
+"""
+	StatsBase.fit!(model::NeuralStatistician, data::Tuple, loss::Function; max_train_time=82800, lr=0.001, 
+		batchsize=64, patience=30, check_interval::Int=10, kwargs...)
+"""
 function StatsBase.fit!(model::NeuralStatistician, data::Tuple, loss::Function;
 	max_iters=10000, max_train_time=82800, lr=0.001, batchsize=64, patience=30,
 	check_interval::Int=10, kwargs...)
@@ -108,6 +124,7 @@ function StatsBase.fit!(model::NeuralStatistician, data::Tuple, loss::Function;
 	_patience = patience
     
 	# prepare data for Neural Statistician
+	@info "Number of training bags: $(length(data[1][1]))"
 	tr_x, tr_l = unpack_mill(data[1])
 	vx, vl = unpack_mill(data[2])
 	val_x = vx[vl .== 0]
@@ -120,7 +137,8 @@ function StatsBase.fit!(model::NeuralStatistician, data::Tuple, loss::Function;
 
 	for batch in RandomBatches(tr_x, 10)
 		"""
-		Neural Statistician models doesn't support minibatches.
+		Neural Statistician models doesn't support minibatches
+		as basic VAE.
 
 		batch_loss = 0f0
 		gs = gradient(() -> begin 
@@ -129,7 +147,8 @@ function StatsBase.fit!(model::NeuralStatistician, data::Tuple, loss::Function;
 	 	Flux.update!(opt, ps, gs)
 		"""
 		# classic training
-		Flux.train!(lossf, ps, tr_x, opt)
+		bag_batch = RandomBagBatch(tr_x,batchsize=batchsize,randomize=true)
+		Flux.train!(lossf, ps, bag_batch, opt)
 		train_loss = mean([lossf(x) for x in tr_x])
 
     		push!(history, :training_loss, i, train_loss)

@@ -8,6 +8,8 @@ using BSON
 using Flux
 using GenerativeModels
 using Distributions
+using CSV, DataFrames
+include(srcdir("mnist_data.jl"))
 
 s = ArgParseSettings()
 @add_arg_table! s begin
@@ -29,7 +31,7 @@ parsed_args = parse_args(ARGS, s)
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
-modelname = "statistician"
+modelname = "nex_statistician"
 # sample parameters, should return a Dict of model kwargs 
 """
 	sample_params()
@@ -40,19 +42,14 @@ For NeuralStatistician model there are two conditions:
 - `zdim` < `cdim`
 """
 function sample_params()
-	par_vec = (2 .^(4:9), 2 .^(2:7), 2 .^(2:7), 2 .^(1:6), 10f0 .^(-4:-3), 3:4, ["relu", "swish", "tanh"], 1:Int(1e8))
-	argnames = (:hdim, :vdim, :cdim, :zdim, :lr, :nlayers, :activation, :init_seed)
-	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
-	# ensure that zdim < hdim
-	while parameters.cdim >= parameters.hdim
-		parameters = merge(parameters, (cdim = sample(par_vec[3]),))
-	end
-	
-	while parameters.zdim >= parameters.cdim
-		parameters = merge(parameters, (zdim = sample(par_vec[4]),))
-	end
+	df = CSV.read(datadir("table.csv"),DataFrame)
+    argnames = (:hdim, :vdim, :cdim, :zdim, :lr, :nlayers, :activation, :init_seed)
+    idx = sample(1:32)
+    par = df[idx,:] |> Array
+    parameters = (;zip(argnames, vcat(par,sample(1:Int(1e8))))...)
 	return parameters
 end
+
 
 """
 	loss(model::GenerativeModels.NeuralStatistician, x)
@@ -83,7 +80,7 @@ function fit(data, parameters)
 	# fit train data
 	try
 		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=82800/max_seed, 
-			patience=20, check_interval=5, parameters...)
+			patience=10, check_interval=1, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
 		@info "Failed training due to \n$e"
@@ -101,13 +98,9 @@ function fit(data, parameters)
 	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
 	L=100
 	return training_info, [
-		(x -> GroupAD.Models.reconstruction_score(info.model,x), 
-			merge(parameters, (score = "reconstruction",))),
-		(x -> GroupAD.Models.reconstruction_score_mean(info.model,x), 
+        (x -> GroupAD.Models.reconstruction_score_mean(info.model,x), 
 			merge(parameters, (score = "reconstruction-mean",))),
-		(x -> GroupAD.Models.reconstruction_score(info.model,x,L), 
-			merge(parameters, (score = "reconstruction-sampled", L=L)))
-	]
+		]
 end
 
 """
@@ -116,7 +109,8 @@ This modifies parameters according to data. Default version only returns the inp
 Overload for models where this is needed.
 """
 function edit_params(data, parameters)
-	parameters
+	inter = [p for p in pairs(parameters) if p[1] != :init_seed]
+	(; inter...)
 end
 
 ####################################################################

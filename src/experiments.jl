@@ -95,11 +95,12 @@ function basic_experimental_loop(sample_params_f, fit_f, edit_params_f,
 			mkpath(_savepath)
 
 			# get data
-			data = load_data(dataset, seed=seed, contamination=contamination)
-											
+			@time data = load_data(dataset, seed=seed, contamination=contamination)
+			@info "Data loaded..."
+
 			# edit parameters
 			edited_parameters = edit_params_f(data, parameters)
-			
+
 			@info "Trying to fit $modelname on $dataset with parameters $(edited_parameters)..."
 			@info "Train/validation/test splits: $(size(data[1][1], 2)) | $(size(data[2][1], 2)) | $(size(data[3][1], 2))"
 			@info "Number of features: $(size(data[1][1], 1))"
