@@ -1,4 +1,3 @@
-# MILL data
 function __init__()
 	register(
 		DataDep(
@@ -16,8 +15,24 @@ function __init__()
 			"9ab2153807d24143d4d0af0b6f4346e349611a4b85d5e31b06d56157b8eed990",
 			post_fetch_method = unpack
 		))
+	register(
+		DataDep(
+			"EMBER",
+			"""
+			Dataset: EMBER 2018
+			Website: https://github.com/elastic/ember
+			
+			EMBER dataset of PE data.
+			""",
+			[
+				"https://ember.elastic.co/ember_dataset_2018_2.tar.bz2"
+			],
+			"b6052eb8d350a49a8d5a5396fbe7d16cf42848b86ff969b77464434cf2997812",
+			post_fetch_method = unpack
+		))
 end
 
+### MILL data ###
 """
     get_mill_datapath()
 
@@ -51,7 +66,7 @@ function load_mill_data(dataset::String; normalize=true)
 	(normal = BagNode(ArrayNode(x[:,c0[:]]), bags0), anomaly = BagNode(ArrayNode(x[:,c1[:]]), bags1),)
 end
 
-# MNIST point-cloud
+### MNIST point-cloud ###
 # unfortunately this is not available in a direct download format, so we need to do it awkwardly like this
 """
     get_mnist_point_cloud_datapath()
@@ -154,6 +169,21 @@ function load_mnist_point_cloud(;anomaly_class::Int=1, noise=true, normalize=tru
 
 	# return normal and anomalous bags (and their labels)
 	(normal = BagNode(ArrayNode(data[:,obs_inds0]), obs0), anomaly = BagNode(ArrayNode(data[:,obs_inds1]), obs1), l_normal = l_normal, l_anomaly = l_anomaly)
+end
+
+### EMBER data
+"""
+    get_ember_datapath()
+
+Get the absolute path of raw EMBER data.
+"""
+get_ember_datapath() = joinpath(datadep"EMBER", "ember2018")
+
+function process_ember_data()
+	dp = get_ember_datapath()
+	bashf = abspath(joinpath(pathof(GroupAD), "../../scripts/ember_init/ember_init.sh"))
+	cmd = `$bashf`
+	run(cmd)
 end
 
 """
