@@ -142,7 +142,7 @@ function load_mnist_point_cloud(;anomaly_class::Int=1, noise=true, normalize=tru
 	train = load(joinpath(dp, "train.bson"))
 	bag_labels = vcat(train[:bag_labels], test[:bag_labels])
 	labels = vcat(train[:labels], test[:labels])
-	bagids = vcat(train[:bagids], test[:bagids])
+	bagids = vcat(train[:bagids], test[:bagids] .+ length(train[:bag_labels]))
 	data = Float32.(hcat(train[:data], test[:data]))
 
 	# add uniform noise to dequantize data
@@ -203,7 +203,7 @@ function load_ember(;normalize=true)
 	if !all(map(x->x in readdir(dp), ["X_test.dat", "X_train.dat", "y_test.dat", "y_train.dat", "metadata.csv"]))
 		_process_ember()
 	end
-	
+end	
 
 
 """
