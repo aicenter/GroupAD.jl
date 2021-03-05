@@ -5,3 +5,4 @@ using GroupAD
 using Statistics
 
 include("aggregation.jl")
+include("data.jl")

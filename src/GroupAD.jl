@@ -9,6 +9,7 @@ using DelimitedFiles
 using FileIO
 using BSON
 using DataDeps
+using Mmap
 
 include("data.jl")
 include("experiments.jl")
