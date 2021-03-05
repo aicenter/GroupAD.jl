@@ -52,10 +52,10 @@ function load_mill_data(dataset::String; normalize=true)
 	y = readdlm("$mdp/$(dataset)/labels.csv",'\t',Int)
 	
 	# plit to 0/1 classes
-	c0 = y.==0
-	c1 = y.==1
-	bags0 = seqids2bags(bagids[c0[:]])
-	bags1 = seqids2bags(bagids[c1[:]])
+	obs_inds0 = vec(y.==0)
+	obs_inds1 = vec(y.==1)
+	bags0 = seqids2bags(bagids[obs_inds0])
+	bags1 = seqids2bags(bagids[obs_inds1])
 
 	# normalize to standard normal
 	if normalize 
@@ -63,7 +63,7 @@ function load_mill_data(dataset::String; normalize=true)
 	end
 	
 	# return normal and anomalous bags
-	(normal = BagNode(ArrayNode(x[:,c0[:]]), bags0), anomaly = BagNode(ArrayNode(x[:,c1[:]]), bags1),)
+	(normal = BagNode(ArrayNode(x[:,obs_inds0]), bags0), anomaly = BagNode(ArrayNode(x[:,obs_inds1]), bags1),)
 end
 
 ### MNIST point-cloud ###
@@ -226,6 +226,19 @@ function y_on_instances(bagnode, y)
 end
 
 """
+	reindex(bagnode, inds)
+
+A faster implementation of Base.getindex.
+"""
+function reindex(bagnode, inds)
+	obs_inds = bagnode.bags[inds]
+	new_bagids = vcat(map(x->repeat([x[1]], length(x[2])), enumerate(obs_inds))...)
+	data = bagnode.data.data[:,vcat(obs_inds...)]
+	new_bags = GroupAD.seqids2bags(new_bagids)
+	BagNode(ArrayNode(data), new_bags)
+end
+
+"""
     standardize(Y)
 
 Scales down a 2 dimensional array so it has approx. standard normal distribution. 
@@ -304,8 +317,8 @@ function train_val_test_split(data_normal, data_anomalous, ratios=(0.6,0.2,0.2);
 	vtr = (1 - tr)/2 # validation/test ratio
 	split_inds_anomalous = train_val_test_inds(indices_anomalous, (tr, vtr, vtr); seed=seed)
 
-	tr_n, val_n, tst_n = map(is -> data_normal[is], split_inds)
-	tr_a, val_a, tst_a = map(is -> data_anomalous[is], split_inds_anomalous)
+	tr_n, val_n, tst_n = map(is -> reindex(data_normal, is), split_inds)
+	tr_a, val_a, tst_a = map(is -> reindex(data_anomalous, is), split_inds_anomalous)
 
 	# cat it together
 	tr_x = cat(tr_n, tr_a, dims = nd)
