@@ -76,11 +76,11 @@ Get the absolute path of the MNIST point cloud dataset. Equals to `datadir("mnis
 get_mnist_point_cloud_datapath() = datadir("mnist_point_cloud")
 
 """
-	_process_raw_mnist_point_cloud()
+	process_raw_mnist_point_cloud()
 
 One-time processing of MNIST point cloud data that saves them in .bson files.
 """
-function _process_raw_mnist_point_cloud()
+function process_raw_mnist_point_cloud()
 	dp = get_mnist_point_cloud_datapath()
 
 	# check if the path exists
@@ -134,7 +134,7 @@ function load_mnist_point_cloud(;anomaly_class::Int=1, noise=true, normalize=tru
 
 	# check if the data is there
 	if !ispath(dp) || !all(map(x->x in readdir(dp), ["test.bson", "train.bson"]))
-		_process_raw_mnist_point_cloud()
+		process_raw_mnist_point_cloud()
 	end
 	
 	# load bson data and join them together
@@ -201,7 +201,7 @@ function load_ember(;normalize=true)
 
 	# check if the data is there
 	if !all(map(x->x in readdir(dp), ["X_test.dat", "X_train.dat", "y_test.dat", "y_train.dat", "metadata.csv"]))
-		_process_ember()
+		process_ember()
 	end
 end	
 
