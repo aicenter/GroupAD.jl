@@ -203,7 +203,25 @@ function load_ember(;normalize=true)
 	if !all(map(x->x in readdir(dp), ["X_test.dat", "X_train.dat", "y_test.dat", "y_train.dat", "metadata.csv"]))
 		process_ember()
 	end
-end	
+
+	# load train data
+	sy = open(joinpath(dp, "y_train.dat"), "r")
+	y_train = Mmap.mmap(sy, Vector{Float32})
+	close(sy)
+	sx = open(joinpath(dp, "X_train.dat"), "r")
+	X_train = Mmap.mmap(sx, Array{Float32,2}, (2381,length(y_train)))
+	close(sx)
+
+	# load test data
+	sy = open(joinpath(dp, "y_test.dat"), "r")
+	y_test = Mmap.mmap(sy, Vector{Float32})
+	close(sy)
+	sx = open(joinpath(dp, "X_test.dat"), "r")
+	X_test = Mmap.mmap(sx, Array{Float32,2}, (2381,length(y_test)))
+	close(sx)
+
+	X_train, y_train, X_tst, y_tst
+end
 
 
 """
