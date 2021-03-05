@@ -179,12 +179,32 @@ Get the absolute path of raw EMBER data.
 """
 get_ember_datapath() = joinpath(datadep"EMBER", "ember2018")
 
-function process_ember_data()
+"""
+	process_ember()
+
+Extract features from the EMBER raw PE data using the `ember` library. Requires Python3.
+"""
+function process_ember()
 	dp = get_ember_datapath()
 	bashf = abspath(joinpath(pathof(GroupAD), "../../scripts/ember_init/ember_init.sh"))
 	cmd = `$bashf`
 	run(cmd)
 end
+
+"""
+	load_ember(;normalize=true)
+
+Load the EMBER vectorized data.
+"""
+function load_ember(;normalize=true)
+	dp = get_ember_datapath()
+
+	# check if the data is there
+	if !all(map(x->x in readdir(dp), ["X_test.dat", "X_train.dat", "y_test.dat", "y_train.dat", "metadata.csv"]))
+		_process_ember()
+	end
+	
+
 
 """
 	seqids2bags(bagids)
