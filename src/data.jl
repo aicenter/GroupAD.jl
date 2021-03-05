@@ -217,7 +217,7 @@ function load_ember(;normalize=true)
 	y_tst = Mmap.mmap(sy, Vector{Float32})
 	close(sy)
 	sx = open(joinpath(dp, "X_test.dat"), "r")
-	X_tst = Mmap.mmap(sx, Array{Float32,2}, (2381,length(y_test)))
+	X_tst = Mmap.mmap(sx, Array{Float32,2}, (2381,length(y_tst)))
 	close(sx)
 
 	X_train, y_train, X_tst, y_tst
