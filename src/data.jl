@@ -1,3 +1,4 @@
+# MILL data
 function __init__()
 	register(
 		DataDep(
@@ -25,6 +26,137 @@ Get the absolute path of MIProblems data.
 get_mill_datapath() = joinpath(datadep"MIProblems", "MIProblems-master")
 
 """
+	load_mill_data(dataset::String; normalize=true)
+
+Loads basic MIProblems data. For a list of available datasets, do `readdir(GroupAD.get_mill_datapath())`.
+"""
+function load_mill_data(dataset::String; normalize=true)
+	mdp = get_mill_datapath()
+	x=readdlm("$mdp/$(dataset)/data.csv",'\t',Float32)
+	bagids = readdlm("$mdp/$(dataset)/bagids.csv",'\t',Int)[:]
+	y = readdlm("$mdp/$(dataset)/labels.csv",'\t',Int)
+	
+	# plit to 0/1 classes
+	c0 = y.==0
+	c1 = y.==1
+	bags0 = seqids2bags(bagids[c0[:]])
+	bags1 = seqids2bags(bagids[c1[:]])
+
+	# normalize to standard normal
+	if normalize 
+		x .= standardize(x)
+	end
+	
+	# return normal and anomalous bags
+	(normal = BagNode(ArrayNode(x[:,c0[:]]), bags0), anomaly = BagNode(ArrayNode(x[:,c1[:]]), bags1),)
+end
+
+# MNIST point-cloud
+# unfortunately this is not available in a direct download format, so we need to do it awkwardly like this
+"""
+    get_mnist_point_cloud_datapath()
+
+Get the absolute path of the MNIST point cloud dataset. Equals to `datadir("mnist_point_cloud")`.
+"""
+get_mnist_point_cloud_datapath() = datadir("mnist_point_cloud")
+
+"""
+	_process_raw_mnist_point_cloud()
+
+One-time processing of MNIST point cloud data that saves them in .bson files.
+"""
+function _process_raw_mnist_point_cloud()
+	dp = get_mnist_point_cloud_datapath()
+
+	# check if the path exists
+	if !ispath(dp) || length(readdir(dp)) == 0 || !all(map(x->x in readdir(dp), ["test.csv", "train.csv"]))
+		mkpath(dp)
+		error("MNIST point cloud data are not present. Unfortunately no automated download is available. Please download the `train.csv.zip` and `test.csv.zip` files manually from https://www.kaggle.com/cristiangarcia/pointcloudmnist2d and unzip them in `$(dp)`.")
+	end
+	
+	@info "Processing raw MNIST point cloud data..."
+	for fs in ["test", "train"]
+		indata = readdlm(joinpath(dp, "$fs.csv"),',',Int32,header=true)[1]
+		bag_labels = indata[:,1]
+		labels = []
+		bagids = []
+		data = []
+		for (i,row) in enumerate(eachrow(indata))
+			# get x data and specify valid values
+			x = row[2:3:end]
+			valid_inds = x .!= -1
+			x = reshape(x[valid_inds],1,:)
+			
+			# get y and intensity
+			y = reshape(row[3:3:end][valid_inds],1,:)
+			v = reshape(row[4:3:end][valid_inds],1,:)
+
+			# now append to the lists
+			push!(labels, repeat([row[1]], length(x)))
+			push!(bagids, repeat([i], length(x)))
+			push!(data, vcat(x,y,v))
+		end
+		outdata = Dict(
+			:bag_labels => bag_labels,
+			:labels => vcat(labels...),
+			:bagids => vcat(bagids...),
+			:data => hcat(data...)
+			)
+		bf = joinpath(dp, "$fs.bson")
+		save(bf, outdata)
+		@info "Succesfuly processed and saved $bf"
+	end
+	@info "Done."
+end
+
+"""
+	load_mnist_point_cloud(;anomaly_class::Int=1 noise=true, normalize=true)
+
+Load the MNIST point cloud data.
+"""
+function load_mnist_point_cloud(;anomaly_class::Int=1, noise=true, normalize=true)
+	dp = get_mnist_point_cloud_datapath()
+
+	# check if the data is there
+	if !ispath(dp) || !all(map(x->x in readdir(dp), ["test.bson", "train.bson"]))
+		_process_raw_mnist_point_cloud()
+	end
+	
+	# load bson data and join them together
+	test = load(joinpath(dp, "test.bson"))
+	train = load(joinpath(dp, "train.bson"))
+	bag_labels = vcat(train[:bag_labels], test[:bag_labels])
+	labels = vcat(train[:labels], test[:labels])
+	bagids = vcat(train[:bagids], test[:bagids] .+ 60000)
+	data = Float32.(hcat(train[:data], test[:data]))
+
+	# add uniform noise to dequantize data
+	if noise
+		data = data .+ rand(size(data)...)
+	end
+	
+	# split to 0/1 classes - instances
+	obs_inds0 = labels .!= anomaly_class
+	obs_inds1 = labels .== anomaly_class
+	obs0 = seqids2bags(bagids[obs_inds0])
+	obs1 = seqids2bags(bagids[obs_inds1])
+
+	# split to 0/1 classes - bags
+	bag_inds0 = bag_labels .!= anomaly_class
+	bag_inds1 = bag_labels .== anomaly_class	
+	l_normal = bag_labels[bag_inds0]
+	l_anomaly = bag_labels[bag_inds1]
+
+	# transform data
+	if normalize
+		data = standardize(data)
+	end
+
+	# return normal and anomalous bags (and their labels)
+	(normal = BagNode(ArrayNode(data[:,obs_inds0]), obs0), anomaly = BagNode(ArrayNode(data[:,obs_inds1]), obs1), l_normal = l_normal, l_anomaly = l_anomaly)
+end
+
+"""
 	seqids2bags(bagids)
 
 """
@@ -49,7 +181,7 @@ end
 Scales down a 2 dimensional array so it has approx. standard normal distribution. 
 Instance = column. 
 """
-function standardize(Y::Array{T,2} where T<:Real)
+function standardize(Y::Array{T,2}) where T<:Real
     M, N = size(Y)
     mu = Statistics.mean(Y,dims=2);
     sigma = Statistics.var(Y,dims=2);
@@ -66,32 +198,6 @@ function standardize(Y::Array{T,2} where T<:Real)
     nom[abs.(nom) .<= 1e-8] .= 0.0
     Y = nom./den
     return Y
-end
-
-"""
-	load_mill_data(dataset::String; normalize=true)
-
-Loads basic MIProblems data. For a list of available datasets, do `readdir(GroupAD.get_mill_datapath())`.
-"""
-function load_mill_data(dataset::String; normalize=true)
-	mdp = get_mill_datapath()
-	x=readdlm("$mdp/$(dataset)/data.csv",'\t',Float32)
-	bagids = readdlm("$mdp/$(dataset)/bagids.csv",'\t',Int)[:]
-	y = readdlm("$mdp/$(dataset)/labels.csv",'\t',Int)
-	
-	# plit to 0/1 classes
-	c0 = y.==0
-	c1 = y.==1
-	bags0 = seqids2bags(bagids[c0[:]])
-	bags1 = seqids2bags(bagids[c1[:]])
-
-	# normalize to standard normal
-	if normalize 
-		x .= standardize(x)
-	end
-	
-	# return normal and anomalous bags
-	(normal = BagNode(ArrayNode(x[:,c0[:]]), bags0), anomaly = BagNode(ArrayNode(x[:,c1[:]]), bags1),)
 end
 
 import Base.length
@@ -166,22 +272,20 @@ end
 
 """
 	load_data(dataset::String, ratios=(0.6,0.2,0.2); seed=nothing, 
-		contamination::Real=0.0, normalize=true)
+		contamination::Real=0.0, normalize=true, anomaly_class=1)
 
-Returns 3 tuples of (data, labels) representing train/validation/test part. Arguments are the splitting
-ratios for normal data, seed and training data contamination.
+Returns 3 tuples of (data, labels) representing train/validation/test part. Arguments are the splitting ratios for normal data, seed and training data contamination.
 
-For a list of available datasets, do `readdir(GroupAD.get_mill_datapath())`.
+Apart from `mnist_point_cloud` a.k.a. `MNIST`, the available datasets can be obtained by `readdir(GroupAD.get_mill_datapath())`.
 """
 function load_data(dataset::String, ratios=(0.6,0.2,0.2); seed=nothing, 
 	contamination::Real=0.0, kwargs...)
 
 	# extract data and labels
-	if dataset == "mnist"
-		return MNIST_train_test(2)
+	if dataset in ["MNIST", "mnist_point_cloud"]
+		data_normal, data_anomalous, bag_labels_normal, bag_labels_anomalous = load_mnist_point_cloud(;kwargs...)
 	else
 		data_normal, data_anomalous = load_mill_data(dataset; kwargs...)
-		return train_val_test_split(data_normal, data_anomalous, ratios; seed=seed, contamination=contamination)
 	end
 	
 	# now do the train/validation/test split
