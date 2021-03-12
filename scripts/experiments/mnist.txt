@@ -1,1 +1,2 @@
-MNIST
+MNIST_in
+MNIST_out

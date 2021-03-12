@@ -1,6 +1,6 @@
 """
 	basic_experimental_loop(sample_params_f, fit_f, edit_params_f, 
-		max_seed, modelname, dataset, contamination, savepath)
+		max_seed, modelname, dataset, contamination, savepath, classes)
 
 This function takes a function that samples parameters, a fit function and a function that edits the sampled
 parameters and other parameters. Then it loads data, samples hyperparameters, calls the fit function
@@ -8,7 +8,7 @@ that is supposed to construct and fit a model and finally evaluates the returned
 the loaded data.
 """
 function basic_experimental_loop(sample_params_f, fit_f, edit_params_f, 
-		max_seed, modelname, dataset, contamination, savepath, setting, classes)
+		max_seed, modelname, dataset, contamination, savepath, classes)
 	# set a maximum for parameter sampling retries
 	# this is here because you might sample the same parameters of an already trained model
 	# in that case this loop runs again, for a total of 10 tries
@@ -22,23 +22,24 @@ function basic_experimental_loop(sample_params_f, fit_f, edit_params_f,
 		for class in classes
 	    # with these hyperparameters, train and evaluate the model on different train/val/tst splits
 			for seed in 1:max_seed
-				# define where data is going to be saved
-				_savepath = joinpath(savepath, "$(modelname)/$(setting)/class=$(class)/seed=$(seed)")
-				mkpath(_savepath)
-
-				# get data
+				# load data for either "MNIST_in" or "MNIST_out" and set the setting
 				data = load_data(dataset, anomaly_class=class, seed=seed, contamination=contamination)
-				if setting == "leave-one-in"
+				if dataset == "MNIST_in"
 					data = GroupAD.leave_one_in(data; seed=seed)
-				# ? in leave-one-out setting the ratio of anomalous and normal data seems fine (approx. 1:5)
+					setting = "leave-one-in"
 				else
 					data = GroupAD.leave_one_out(data; seed=seed)
+					setting = "leave-one-out"
 				end
+				
+				# define where data is going to be saved
+				_savepath = joinpath(savepath, "$(modelname)/MNIST/$(setting)/class=$(class)/seed=$(seed)")
+				mkpath(_savepath)
 				
 				# edit parameters
 				edited_parameters = edit_params_f(data, parameters)
 				
-				@info "Trying to fit $modelname on $dataset with parameters $(edited_parameters)..."
+				@info "Trying to fit $modelname on MNIST with class=$class in $setting setting.\nModel parameters: $(edited_parameters)..."
 				@info "Train/validation/test splits: $(size(data[1][1], 2)) | $(size(data[2][1], 2)) | $(size(data[3][1], 2))"
 				@info "Number of features: $(size(data[1][1], 1))"
 

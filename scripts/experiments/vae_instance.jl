@@ -7,7 +7,6 @@ using StatsBase
 using BSON
 using Flux
 using GenerativeModels
-using Random
 
 s = ArgParseSettings()
 @add_arg_table! s begin
@@ -29,7 +28,7 @@ parsed_args = parse_args(ARGS, s)
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
-modelname = "vae_MNIST"
+modelname = "vae_instance"
 # sample parameters, should return a Dict of model kwargs 
 """
 	sample_params()
@@ -37,9 +36,8 @@ modelname = "vae_MNIST"
 Should return a named tuple that contains a sample of model parameters.
 """
 function sample_params()
-	par_vec = (2 .^(1:8), 2 .^(4:9), 10f0 .^(-4:-3), 2 .^ (5:7), ["relu", "swish", "tanh"], 3:4, 1:Int(1e8),
-		["mean", "maximum", "median"])
-	argnames = (:zdim, :hdim, :lr, :batchsize, :activation, :nlayers, :init_seed, :aggregation)
+	par_vec = (2 .^(3:8), 2 .^(4:9), 10f0 .^(-4:-3), 2 .^ (5:7), ["relu", "swish", "tanh"], 3:4, 1:Int(1e8))
+	argnames = (:zdim, :hdim, :lr, :batchsize, :activation, :nlayers, :init_seed)
 	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
 	# ensure that zdim < hdim
 	while parameters.zdim >= parameters.hdim
@@ -57,7 +55,6 @@ loss(model::GenerativeModels.VAE, x) = -elbo(model, x)
 # version of loss for large datasets
 loss(model::GenerativeModels.VAE, x, batchsize::Int) = 
 	mean(map(y->loss(model,y), Flux.Data.DataLoader(x, batchsize=batchsize)))
-
 
 """
     train_val_data(data::Tuple)
@@ -86,19 +83,13 @@ Final parameters is a named tuple of names and parameter values that are used fo
 function fit(data, parameters)
 	# construct model - constructor should only accept kwargs
 	model = GroupAD.Models.vae_constructor(;idim=size(data[1][1],1), parameters...)
-
-	# aggregate bags into vectors
-	# first convert the aggregation string to a function
-	agf = getfield(StatsBase, Symbol(parameters.aggregation))
-    vae_data = train_val_data(data)
-
-    @info "Data processed and cut."
-    # data = GroupAD.Models.aggregate(data, agf)
+	# get only the data needed and unpack them from bags to intances
+    instance_data = train_val_data(data)
 
 	# fit train data
 	try
-		global info, fit_t, _, _, _ = @timed fit!(model, vae_data, loss; max_train_time=82800/max_seed, 
-			patience=200, check_interval=10, parameters...)
+		global info, fit_t, _, _, _ = @timed fit!(model, instance_data, loss; max_train_time=82800/max_seed, 
+			patience=100, check_interval=10, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
 		@info "Failed training due to \n$e"
@@ -113,7 +104,7 @@ function fit(data, parameters)
 		model = info.model
 		)
 
-	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
+	# now return the infor to be saved and an array of tuples (anomaly score function, hyperparatemers)
 	L=100
 	training_info, [
 		(x -> GroupAD.Models.reconstruction_score_bag(info.model,x,mean), 
@@ -134,10 +125,9 @@ This function edits the sampled parameters based on nature of data - e.g. dimens
 behaviour is doing nothing - then used `GroupAD.edit_params`.
 """ 
 function edit_params(data, parameters)
-    parameters
+	parameters
 end
 
-classes = 0:9
 ####################################################################
 ################ THIS PART IS COMMON FOR ALL MODELS ################
 # only execute this if run directly - so it can be included in other files
@@ -151,7 +141,5 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		dataset, 
 		contamination, 
 		datadir("experiments/contamination-$(contamination)"),
-        "leave-one-in",
-        classes
 		)
 end

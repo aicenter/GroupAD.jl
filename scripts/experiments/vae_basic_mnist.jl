@@ -15,7 +15,7 @@ s = ArgParseSettings()
         help = "seed"
         default = 1
     "dataset"
-        default = "Fox"
+        default = "MNIST_in"
         arg_type = String
         help = "dataset"
    "contamination"
@@ -36,7 +36,7 @@ modelname = "vae_basic"
 Should return a named tuple that contains a sample of model parameters.
 """
 function sample_params()
-	par_vec = (2 .^(1:6), 2 .^(4:9), 10f0 .^(-4:-3), 2 .^ (5:7), ["relu", "swish", "tanh"], 3:4, 1:Int(1e8),
+	par_vec = (2 .^(1:8), 2 .^(4:9), 10f0 .^(-4:-3), 2 .^ (5:7), ["relu", "swish", "tanh"], 3:4, 1:Int(1e8),
 		["mean", "maximum", "median"])
 	argnames = (:zdim, :hdim, :lr, :batchsize, :activation, :nlayers, :init_seed, :aggregation)
 	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
@@ -58,22 +58,6 @@ loss(model::GenerativeModels.VAE, x, batchsize::Int) =
 	mean(map(y->loss(model,y), Flux.Data.DataLoader(x, batchsize=batchsize)))
 
 """
-    train_val_data(data::Tuple)
-
-Make the data trainable via the basic vae model and its fit function.
-"""
-function train_val_data(data::Tuple)
-    train, val, test = data
-
-    train_new = (train[1].data.data, train[2])
-    val_inst = GroupAD.reindex(val[1],val[2] .== 0).data.data
-    nv = size(val_inst,2)
-    nv_all = size(val[1].data.data,2)
-    val_new = (val[1].data.data, vcat(zeros(Float32,nv),ones(Float32,nv_all-nv)))
-    return (train_new, val_new)
-end
-
-"""
 	fit(data, parameters)
 
 This is the most important function - returns `training_info` and a tuple or a vector of tuples `(score_fun, final_parameters)`.
@@ -88,12 +72,12 @@ function fit(data, parameters)
 	# aggregate bags into vectors
 	# first convert the aggregation string to a function
 	agf = getfield(StatsBase, Symbol(parameters.aggregation))
-    vae_data = train_val_data(data)
+	data = GroupAD.Models.aggregate(data, agf)
 
 	# fit train data
 	try
-		global info, fit_t, _, _, _ = @timed fit!(model, vae_data, loss; max_train_time=82800/max_seed, 
-			patience=10, check_interval=10, parameters...)
+		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=82800/max_seed, 
+			patience=200, check_interval=10, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
 		@info "Failed training due to \n$e"
@@ -110,15 +94,14 @@ function fit(data, parameters)
 
 	# now return the infor to be saved and an array of tuples (anomaly score function, hyperparatemers)
 	L=100
+	batchsize=512
 	training_info, [
-		(x -> GroupAD.Models.reconstruction_score_bag(info.model,x,mean), 
-			merge(parameters, (score = "reconstruction_mean",))),
-        (x -> GroupAD.Models.reconstruction_score_bag(info.model,x,sum), 
-			merge(parameters, (score = "reconstruction_sum",))),
-        (x -> GroupAD.Models.reconstruction_score_bag_mean(info.model,x,mean), 
-			merge(parameters, (score = "reconstruction-mean_mean",))),
-        (x -> GroupAD.Models.reconstruction_score_bag_mean(info.model,x,sum), 
-			merge(parameters, (score = "reconstruction-mean_sum",))),
+		(x -> GroupAD.Models.reconstruction_score(info.model,x,agf), 
+			merge(parameters, (score = "reconstruction",))),
+		(x -> GroupAD.Models.reconstruction_score_mean(info.model,x,agf), 
+			merge(parameters, (score = "reconstruction-mean",))),
+		(x -> GroupAD.Models.reconstruction_score(info.model,x,agf,L), 
+			merge(parameters, (score = "reconstruction-sampled", L=L)))		
 	]
 end
 
@@ -129,10 +112,16 @@ This function edits the sampled parameters based on nature of data - e.g. dimens
 behaviour is doing nothing - then used `GroupAD.edit_params`.
 """ 
 function edit_params(data, parameters)
+	idim = size(data[1][1].data.data,1)
+	# put the largest possible zdim where zdim < idim, the model tends to converge poorly if the latent dim is larger than idim
+	if parameters.zdim >= idim
+		zdims = 2 .^(1:8)
+		zdim_new = zdims[zdims .< idim][end]
+		parameters = merge(parameters, (zdim=zdim_new,))
+	end
 	parameters
 end
 
-classes = 0:9
 ####################################################################
 ################ THIS PART IS COMMON FOR ALL MODELS ################
 # only execute this if run directly - so it can be included in other files
@@ -146,7 +135,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		dataset, 
 		contamination, 
 		datadir("experiments/contamination-$(contamination)"),
-        "leave-one-out",
-        classes
+        0:9
 		)
 end

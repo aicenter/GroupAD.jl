@@ -231,7 +231,7 @@ function reconstruction_score_mean(model::VAE, x::Mill.BagNode, agf::Function)
 	reconstruction_score_mean(model, _x)
 end
 
-function reconstruction_score_bag_mean(model::VAE, x::Mill.BagNode, fun::Function)
+function reconstruction_score_bag_mean(model::VAE, x::Mill.BagNode, fun::Function, args...)
 	vec = [x.data.data[:,j] for (i,j) in enumerate(x.bags)]
 	[fun(reconstruction_score_mean(model, bag, args...)) for bag in vec]
 end
