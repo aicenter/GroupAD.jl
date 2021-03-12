@@ -208,6 +208,12 @@ function reconstruction_score(model::VAE, x::Mill.BagNode, agf::Function, args..
 	return reconstruction_score(model, _x, args...)
 end
 
+function reconstruction_score_bag(model::VAE, x::Mill.BagNode, fun::Function, args...)
+	vec = [x.data.data[:,j] for (i,j) in enumerate(x.bags)]
+	[fun(reconstruction_score(model, bag, args...)) for bag in vec]
+end
+
+
 """
 	reconstruction_score_mean(model::VAE, x)
 	reconstruction_score_mean(model::VAE, x::Mill.BagNode, agf)
@@ -223,6 +229,11 @@ function reconstruction_score_mean(model::VAE, x::Mill.BagNode, agf::Function)
 	# aggregate x - bags to vectors
 	_x = aggregate(x, agf)
 	reconstruction_score_mean(model, _x)
+end
+
+function reconstruction_score_bag_mean(model::VAE, x::Mill.BagNode, fun::Function)
+	vec = [x.data.data[:,j] for (i,j) in enumerate(x.bags)]
+	[fun(reconstruction_score_mean(model, bag, args...)) for bag in vec]
 end
 
 """

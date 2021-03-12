@@ -351,6 +351,68 @@ function train_val_test_split(data_normal, data_anomalous, ratios=(0.6,0.2,0.2);
 	(tr_x, tr_y), (val_x, val_y), (tst_x, tst_y)
 end
 
+
+"""
+    leave_one_in(data, seed=seed)
+
+Prepares MNIST point cloud data in the leave-one-in setting.
+The data have to be loaded with `load_data("MNIST_in",anomaly_class=class)`.
+
+The class is intended to be the normal class in this case! Since normal class
+would be underrepresented, the data is further cut such that validation and test
+contain normal and anomalous samples in 1:1 ratio.
+"""
+function leave_one_in(data; seed=nothing)
+    train, val, test = data
+	# count number of normal samples in validation data
+    l0 = sum(val[2] .== 0)
+
+    # set seed and get indices of length == l0
+    (seed === nothing) ? nothing : Random.seed!(seed)
+    inds = sample(l0+1:length(val[2]),l0)
+
+    # get the subset of anomalous data in validation and test data
+    val_an = (GroupAD.reindex(val[1],inds),val[2][inds])
+    test_an = (GroupAD.reindex(test[1],inds),test[2][inds])
+
+    # create new data
+    # number of normal and anomalous samples in val/test is 1:1
+    val_new = (cat(val[1][1:l0],val_an[1]), vcat(val[2][1:l0],val_an[2]))
+    test_new = (cat(test[1][1:l0],test_an[1]), vcat(test[2][1:l0],test_an[2]))
+
+    return (train, val_new, test_new)
+end
+
+
+"""
+    leave_one_out(data, seed=seed)
+
+Prepares MNIST point cloud data in the leave-one-out setting.
+The data should be loaded with `load_data("MNIST_out",anomaly_class=class)`.
+
+The anomaly class in underrepresented, therefore the ratio of normal and anomalous
+samples in validation and test data is made 1:1. Training data is left as before.
+"""
+function leave_one_out(data; seed=nothing)
+	train, val, test = data
+	# count number of anomalous samples in validation data
+	l0 = sum(val[2] .== 1)
+	(seed === nothing) ? nothing : Random.seed!(seed)
+    inds = sample(1:length(val[2])-l0,l0)
+
+	# get the subset of normal data in validation and test data
+    val_n = (GroupAD.reindex(val[1],inds),val[2][inds])
+    test_n = (GroupAD.reindex(test[1],inds),test[2][inds])
+
+    # create new data
+    # number of normal and anomalous samples in val/test is 1:1
+	val_len = length(val[2])
+    val_new = (cat(val_n[1],GroupAD.reindex(val[1],val_len-l0+1:val_len)),vcat(val_n[2],val[2][val_len-l0+1:end]))
+	test_new = (cat(test_n[1],GroupAD.reindex(test[1],val_len-l0+1:val_len)),vcat(test_n[2],test[2][val_len-l0+1:end]))
+
+    return (train, val_new, test_new)
+end
+
 """
 	load_data(dataset::String, ratios=(0.6,0.2,0.2); seed=nothing, 
 		contamination::Real=0.0, normalize=true, anomaly_class=1)
@@ -363,8 +425,10 @@ function load_data(dataset::String, ratios=(0.6,0.2,0.2); seed=nothing,
 	contamination::Real=0.0, kwargs...)
 
 	# extract data and labels
-	if dataset in ["MNIST", "mnist_point_cloud"]
+	if dataset in ["MNIST", "mnist_point_cloud", "MNIST_out"]
 		data_normal, data_anomalous, bag_labels_normal, bag_labels_anomalous = load_mnist_point_cloud(;kwargs...)
+	elseif dataset == "MNIST_in"
+		data_anomalous, data_normal, bag_labels_anomalous, bag_labels_normal = load_mnist_point_cloud(;kwargs...)
 	else
 		data_normal, data_anomalous = load_mill_data(dataset; kwargs...)
 	end
