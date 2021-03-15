@@ -7,11 +7,11 @@ parameters and other parameters. Then it loads data, samples hyperparameters, ca
 that is supposed to construct and fit a model and finally evaluates the returned score functions on 
 the loaded data.
 
-This function works for MNIST dataset. Differentiation between leave-one-in and leave-one-out
-setting is done with different name of the dataset. Runs over all classes (0-9).
+This function works for point cloud datasets. Differentiation between leave-one-in and leave-one-out
+setting is done parameter `method`.
 """
-function basic_experimental_loop(sample_params_f, fit_f, edit_params_f, 
-		max_seed, modelname, dataset, contamination, savepath, classes)
+function point_cloud_experimental_loop(sample_params_f, fit_f, edit_params_f, 
+		max_seed, modelname, dataset, contamination, savepath, anomaly_classes, method)
 	# set a maximum for parameter sampling retries
 	# this is here because you might sample the same parameters of an already trained model
 	# in that case this loop runs again, for a total of 10 tries
@@ -22,29 +22,28 @@ function basic_experimental_loop(sample_params_f, fit_f, edit_params_f,
 	    parameters = sample_params_f()
 
 		# run over all classes with the same hyperparameters
-		for class in classes
+		for seed in 1:max_seed
 	    # with these hyperparameters, train and evaluate the model on different train/val/tst splits
-			for seed in 1:max_seed
+			for class in 1:anomaly_classes
 				# load data for either "MNIST_in" or "MNIST_out" and set the setting
-				data = load_data(dataset, anomaly_class=class, seed=seed, contamination=contamination)
-				if dataset == "MNIST_in"
+				# prepared for other point cloud datasets such as ModelNet10
+				data = load_data(dataset, anomaly_class_ind=class, seed=seed, method=method, contamination=contamination)
+				if method == "leave-one-in"
 					data = GroupAD.leave_one_in(data; seed=seed)
-					setting = "leave-one-in"
-				elseif dataset in ["MNIST_out", "MNIST", "mnist_point_cloud"]
+				elseif method == "leave-one-out"
 					data = GroupAD.leave_one_out(data; seed=seed)
-					setting = "leave-one-out"
 				else
-					error("MNIST models can only be run on MNIST point cloud dataset!")
+					error("This model can only run on point cloud datasets!")
 				end
 				
 				# define where data is going to be saved
-				_savepath = joinpath(savepath, "$(modelname)/MNIST/$(setting)/class=$(class)/seed=$(seed)")
+				_savepath = joinpath(savepath, "$(modelname)/$(dataset)/$(method)/class_index=$(class)/seed=$(seed)")
 				mkpath(_savepath)
 				
 				# edit parameters
 				edited_parameters = edit_params_f(data, parameters)
 				
-				@info "Trying to fit $modelname on MNIST with class=$class in $setting setting.\nModel parameters: $(edited_parameters)..."
+				@info "Trying to fit $modelname on $(dataset) in $method setting.\nModel parameters: $(edited_parameters)..."
 				@info "Train/validation/test splits: $(size(data[1][1], 2)) | $(size(data[2][1], 2)) | $(size(data[3][1], 2))"
 				@info "Number of features: $(size(data[1][1], 1))"
 

@@ -15,16 +15,24 @@ s = ArgParseSettings()
         help = "seed"
         default = 1
     "dataset"
-        default = "MNIST_in"
+        default = "MNIST"
         arg_type = String
         help = "dataset"
+	"anomaly_classes"
+		arg_type = Int
+		default = 10
+		help = "number of anomaly classes"
+	"method"
+		default = "leave-one-out"
+		arg_type = String
+		help = "method for data creation -> \"leave-one-out\" or \"leave-one-in\" "
    "contamination"
         default = 0.0
         arg_type = Float64
         help = "training data contamination rate"
 end
 parsed_args = parse_args(ARGS, s)
-@unpack dataset, max_seed, contamination = parsed_args
+@unpack dataset, max_seed, anomaly_classes, method, contamination = parsed_args
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
@@ -134,7 +142,7 @@ end
 ################ THIS PART IS COMMON FOR ALL MODELS ################
 # only execute this if run directly - so it can be included in other files
 if abspath(PROGRAM_FILE) == @__FILE__
-	GroupAD.basic_experimental_loop(
+	GroupAD.point_cloud_experimental_loop(
 		sample_params, 
 		fit, 
 		edit_params, 
@@ -143,6 +151,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		dataset, 
 		contamination, 
 		datadir("experiments/contamination-$(contamination)"),
-        0:9
+		anomaly_classes,
+        method
 		)
 end

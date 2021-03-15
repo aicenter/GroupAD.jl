@@ -13,7 +13,7 @@ using Mmap
 
 include("data.jl")
 include("experiments.jl")
-include("experiments_mnist.jl")
+include("experiments_point_cloud.jl")
 include("models/Models.jl")
 
 end #module

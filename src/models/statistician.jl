@@ -125,7 +125,6 @@ function StatsBase.fit!(model::NeuralStatistician, data::Tuple, loss::Function;
 	_patience = patience
     
 	# prepare data for Neural Statistician
-	@info "Number of training bags: $(length(data[1][1]))"
 	tr_x, tr_l = unpack_mill(data[1])
 	vx, vl = unpack_mill(data[2])
 	val_x = vx[vl .== 0]
@@ -153,7 +152,7 @@ function StatsBase.fit!(model::NeuralStatistician, data::Tuple, loss::Function;
 		Flux.train!(lossf, ps, bag_batch, opt)
 		train_loss = mean([lossf(x) for x in tr_x])
 
-    		push!(history, :training_loss, i, train_loss)
+    	push!(history, :training_loss, i, train_loss)
 		if mod(i, check_interval) == 0
 			
 			# validation/early stopping

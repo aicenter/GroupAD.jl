@@ -31,6 +31,23 @@ function __init__()
 			"b6052eb8d350a49a8d5a5396fbe7d16cf42848b86ff969b77464434cf2997812",
 			post_fetch_method = unpack
 		))
+	register(
+		DataDep(
+			"ModelNet10",
+			"""
+			Dataset: ModelNet10
+			Dataset website: https://github.com/AnTao97/PointCloudDatasets
+			Official website: http://modelnet.cs.princeton.edu/
+			
+			Princeton ModelNet project of 3D point cloud objects. Using Point Cloud
+			dataset version.
+			""",
+			[
+				"https://www.dropbox.com/s/d5tnwg2legbd6rh/modelnet10_hdf5_2048.zip?dl=1"
+			],
+			"3dd357dfa1ea4bd858ffb2ff9032368f4dbe131a265fdf126a38bbf97075a8e3",
+			post_fetch_method = unpack
+		))
 end
 
 ### MILL data ###
@@ -66,6 +83,9 @@ function load_mill_data(dataset::String; normalize=true)
 	# return normal and anomalous bags
 	(normal = BagNode(ArrayNode(x[:,obs_inds0]), bags0), anomaly = BagNode(ArrayNode(x[:,obs_inds1]), bags1),)
 end
+
+### ModelNet10 point cloud dataset ###
+get_modelnet_datapath() = joinpath(datadep"ModelNet10")
 
 ### MNIST point-cloud ###
 # unfortunately this is not available in a direct download format, so we need to do it awkwardly like this
@@ -126,11 +146,12 @@ function process_raw_mnist_point_cloud()
 end
 
 """
-	load_mnist_point_cloud(;anomaly_class::Int=1 noise=true, normalize=true)
+	load_mnist_point_cloud(;anomaly_class_ind::Int=1 noise=true, normalize=true)
 
-Load the MNIST point cloud data.
+Load the MNIST point cloud data. Anomaly class is chosen as
+`anomaly_class = sort(unique(bag_labels))[anomaly_class_ind]`.
 """
-function load_mnist_point_cloud(;anomaly_class::Int=1, noise=true, normalize=true)
+function load_mnist_point_cloud(;anomaly_class_ind::Int=1, noise=true, normalize=true)
 	dp = get_mnist_point_cloud_datapath()
 
 	# check if the data is there
@@ -151,6 +172,10 @@ function load_mnist_point_cloud(;anomaly_class::Int=1, noise=true, normalize=tru
 		data = data .+ rand(size(data)...)
 	end
 	
+	# choose anomaly class
+	anomaly_class = sort(unique(bag_labels))[anomaly_class_ind]
+	@info "Loading MNIST point cloud with anomaly class: $(anomaly_class)."
+
 	# split to 0/1 classes - instances
 	obs_inds0 = labels .!= anomaly_class
 	obs_inds1 = labels .== anomaly_class
@@ -422,18 +447,20 @@ Returns 3 tuples of (data, labels) representing train/validation/test part. Argu
 
 Apart from `mnist_point_cloud` a.k.a. `MNIST`, the available datasets can be obtained by `readdir(GroupAD.get_mill_datapath())`.
 """
-function load_data(dataset::String, ratios=(0.6,0.2,0.2); seed=nothing, 
+function load_data(dataset::String, ratios=(0.6,0.2,0.2); seed=nothing, method = "leave-one-out",
 	contamination::Real=0.0, kwargs...)
 
 	# extract data and labels
-	if dataset in ["MNIST", "mnist_point_cloud", "MNIST_out"]
-		data_normal, data_anomalous, bag_labels_normal, bag_labels_anomalous = load_mnist_point_cloud(;kwargs...)
-	elseif dataset == "MNIST_in"
-		data_anomalous, data_normal, bag_labels_anomalous, bag_labels_normal = load_mnist_point_cloud(;kwargs...)
+	if dataset in ["MNIST", "mnist_point_cloud"]
+		data_normal, data_anomalous, _, _ = load_mnist_point_cloud(;kwargs...)
 	else
 		data_normal, data_anomalous = load_mill_data(dataset; kwargs...)
 	end
 	
 	# now do the train/validation/test split
-	return train_val_test_split(data_normal, data_anomalous, ratios; seed=seed, contamination=contamination)
+	if method == "leave-one-in"
+		return train_val_test_split(data_anomalous, data_normal, ratios; seed=seed, contamination=contamination)
+	else
+		return train_val_test_split(data_normal, data_anomalous, ratios; seed=seed, contamination=contamination)
+	end
 end
