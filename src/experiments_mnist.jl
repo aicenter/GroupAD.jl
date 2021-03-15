@@ -6,6 +6,9 @@ This function takes a function that samples parameters, a fit function and a fun
 parameters and other parameters. Then it loads data, samples hyperparameters, calls the fit function
 that is supposed to construct and fit a model and finally evaluates the returned score functions on 
 the loaded data.
+
+This function works for MNIST dataset. Differentiation between leave-one-in and leave-one-out
+setting is done with different name of the dataset. Runs over all classes (0-9).
 """
 function basic_experimental_loop(sample_params_f, fit_f, edit_params_f, 
 		max_seed, modelname, dataset, contamination, savepath, classes)
@@ -17,8 +20,8 @@ function basic_experimental_loop(sample_params_f, fit_f, edit_params_f,
 	while try_counter < max_tries
 		# sample the random hyperparameters
 	    parameters = sample_params_f()
-		# class = parameters[:class]
 
+		# run over all classes with the same hyperparameters
 		for class in classes
 	    # with these hyperparameters, train and evaluate the model on different train/val/tst splits
 			for seed in 1:max_seed
@@ -27,9 +30,11 @@ function basic_experimental_loop(sample_params_f, fit_f, edit_params_f,
 				if dataset == "MNIST_in"
 					data = GroupAD.leave_one_in(data; seed=seed)
 					setting = "leave-one-in"
-				else
+				elseif dataset in ["MNIST_out", "MNIST", "mnist_point_cloud"]
 					data = GroupAD.leave_one_out(data; seed=seed)
 					setting = "leave-one-out"
+				else
+					error("MNIST models can only be run on MNIST point cloud dataset!")
 				end
 				
 				# define where data is going to be saved
