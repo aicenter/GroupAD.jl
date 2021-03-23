@@ -286,3 +286,14 @@ function latent_score_mean(model::NeuralStatistician, bag)
 	c = mean(model.encoder_c, p)
 	-logpdf(model.prior_c, c)
 end
+
+"""
+	batched_score(model,score,x,L,batchsize)
+
+Batched score for large datasets. Prepared for bags.
+"""
+function batched_bag_score(model, score, data, batchsize, args...)
+	l = length(data)
+	ids = vcat(1:batchsize:l,l+1)
+	vcat(map(i->Base.invokelatest(score, model,data[ids[i]:ids[i+1]-1], args...),1:length(ids)-1)...)
+end
