@@ -1,3 +1,4 @@
+# MILL data
 function __init__()
 	register(
 		DataDep(
@@ -28,6 +29,23 @@ function __init__()
 				"https://ember.elastic.co/ember_dataset_2018_2.tar.bz2"
 			],
 			"b6052eb8d350a49a8d5a5396fbe7d16cf42848b86ff969b77464434cf2997812",
+			post_fetch_method = unpack
+		))
+	register(
+		DataDep(
+			"ModelNet10",
+			"""
+			Dataset: ModelNet10
+			Dataset website: https://github.com/AnTao97/PointCloudDatasets
+			Official website: http://modelnet.cs.princeton.edu/
+			
+			Princeton ModelNet project of 3D point cloud objects. Using Point Cloud
+			dataset version.
+			""",
+			[
+				"https://www.dropbox.com/s/d5tnwg2legbd6rh/modelnet10_hdf5_2048.zip?dl=1"
+			],
+			"3dd357dfa1ea4bd858ffb2ff9032368f4dbe131a265fdf126a38bbf97075a8e3",
 			post_fetch_method = unpack
 		))
 end
@@ -65,6 +83,9 @@ function load_mill_data(dataset::String; normalize=true)
 	# return normal and anomalous bags
 	(normal = BagNode(ArrayNode(x[:,obs_inds0]), bags0), anomaly = BagNode(ArrayNode(x[:,obs_inds1]), bags1),)
 end
+
+### ModelNet10 point cloud dataset ###
+get_modelnet_datapath() = joinpath(datadep"ModelNet10")
 
 ### MNIST point-cloud ###
 # unfortunately this is not available in a direct download format, so we need to do it awkwardly like this
@@ -125,11 +146,12 @@ function process_raw_mnist_point_cloud()
 end
 
 """
-	load_mnist_point_cloud(;anomaly_class::Int=1 noise=true, normalize=true)
+	load_mnist_point_cloud(;anomaly_class_ind::Int=1 noise=true, normalize=true)
 
-Load the MNIST point cloud data.
+Load the MNIST point cloud data. Anomaly class is chosen as
+`anomaly_class = sort(unique(bag_labels))[anomaly_class_ind]`.
 """
-function load_mnist_point_cloud(;anomaly_class::Int=1, noise=true, normalize=true)
+function load_mnist_point_cloud(;anomaly_class_ind::Int=1, noise=true, normalize=true)
 	dp = get_mnist_point_cloud_datapath()
 
 	# check if the data is there
@@ -150,6 +172,10 @@ function load_mnist_point_cloud(;anomaly_class::Int=1, noise=true, normalize=tru
 		data = data .+ rand(size(data)...)
 	end
 	
+	# choose anomaly class
+	anomaly_class = sort(unique(bag_labels))[anomaly_class_ind]
+	@info "Loading MNIST point cloud with anomaly class: $(anomaly_class)."
+
 	# split to 0/1 classes - instances
 	obs_inds0 = labels .!= anomaly_class
 	obs_inds1 = labels .== anomaly_class
@@ -351,6 +377,68 @@ function train_val_test_split(data_normal, data_anomalous, ratios=(0.6,0.2,0.2);
 	(tr_x, tr_y), (val_x, val_y), (tst_x, tst_y)
 end
 
+
+"""
+    leave_one_in(data, seed=seed)
+
+Prepares MNIST point cloud data in the leave-one-in setting.
+The data have to be loaded with `load_data("MNIST_in",anomaly_class=class)`.
+
+The class is intended to be the normal class in this case! Since normal class
+would be underrepresented, the data is further cut such that validation and test
+contain normal and anomalous samples in 1:1 ratio.
+"""
+function leave_one_in(data; seed=nothing)
+    train, val, test = data
+	# count number of normal samples in validation data
+    l0 = sum(val[2] .== 0)
+
+    # set seed and get indices of length == l0
+    (seed === nothing) ? nothing : Random.seed!(seed)
+    inds = sample(l0+1:length(val[2]),l0)
+
+    # get the subset of anomalous data in validation and test data
+    val_an = (GroupAD.reindex(val[1],inds),val[2][inds])
+    test_an = (GroupAD.reindex(test[1],inds),test[2][inds])
+
+    # create new data
+    # number of normal and anomalous samples in val/test is 1:1
+    val_new = (cat(val[1][1:l0],val_an[1]), vcat(val[2][1:l0],val_an[2]))
+    test_new = (cat(test[1][1:l0],test_an[1]), vcat(test[2][1:l0],test_an[2]))
+
+    return (train, val_new, test_new)
+end
+
+
+"""
+    leave_one_out(data, seed=seed)
+
+Prepares MNIST point cloud data in the leave-one-out setting.
+The data should be loaded with `load_data("MNIST_out",anomaly_class=class)`.
+
+The anomaly class in underrepresented, therefore the ratio of normal and anomalous
+samples in validation and test data is made 1:1. Training data is left as before.
+"""
+function leave_one_out(data; seed=nothing)
+	train, val, test = data
+	# count number of anomalous samples in validation data
+	l0 = sum(val[2] .== 1)
+	(seed === nothing) ? nothing : Random.seed!(seed)
+    inds = sample(1:length(val[2])-l0,l0)
+
+	# get the subset of normal data in validation and test data
+    val_n = (GroupAD.reindex(val[1],inds),val[2][inds])
+    test_n = (GroupAD.reindex(test[1],inds),test[2][inds])
+
+    # create new data
+    # number of normal and anomalous samples in val/test is 1:1
+	val_len = length(val[2])
+    val_new = (cat(val_n[1],GroupAD.reindex(val[1],val_len-l0+1:val_len)),vcat(val_n[2],val[2][val_len-l0+1:end]))
+	test_new = (cat(test_n[1],GroupAD.reindex(test[1],val_len-l0+1:val_len)),vcat(test_n[2],test[2][val_len-l0+1:end]))
+
+    return (train, val_new, test_new)
+end
+
 """
 	load_data(dataset::String, ratios=(0.6,0.2,0.2); seed=nothing, 
 		contamination::Real=0.0, normalize=true, anomaly_class=1)
@@ -359,16 +447,20 @@ Returns 3 tuples of (data, labels) representing train/validation/test part. Argu
 
 Apart from `mnist_point_cloud` a.k.a. `MNIST`, the available datasets can be obtained by `readdir(GroupAD.get_mill_datapath())`.
 """
-function load_data(dataset::String, ratios=(0.6,0.2,0.2); seed=nothing, 
+function load_data(dataset::String, ratios=(0.6,0.2,0.2); seed=nothing, method = "leave-one-out",
 	contamination::Real=0.0, kwargs...)
 
 	# extract data and labels
 	if dataset in ["MNIST", "mnist_point_cloud"]
-		data_normal, data_anomalous, bag_labels_normal, bag_labels_anomalous = load_mnist_point_cloud(;kwargs...)
+		data_normal, data_anomalous, _, _ = load_mnist_point_cloud(;kwargs...)
 	else
 		data_normal, data_anomalous = load_mill_data(dataset; kwargs...)
 	end
 	
 	# now do the train/validation/test split
-	return train_val_test_split(data_normal, data_anomalous, ratios; seed=seed, contamination=contamination)
+	if method == "leave-one-in"
+		return train_val_test_split(data_anomalous, data_normal, ratios; seed=seed, contamination=contamination)
+	else
+		return train_val_test_split(data_normal, data_anomalous, ratios; seed=seed, contamination=contamination)
+	end
 end
