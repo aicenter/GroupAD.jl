@@ -29,8 +29,12 @@ function experiment(score_fun, parameters, data, savepath; verb=true, save_resul
 		)
 	result = Dict{Symbol, Any}([sym=>val for (sym,val) in pairs(merge(result, save_entries))]) # this has to be a Dict 
 	if save_result
-		tagsave(savef, result, safe = true)
-		verb ? (@info "Results saved to $savef") : nothing
+		try
+			tagsave(savef, result, safe = true)
+			verb ? (@info "Results saved to $savef") : nothing
+		catch e
+			@info "Saving failed due to \n$e"
+		end
 	end
 	result
 end
