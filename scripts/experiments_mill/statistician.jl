@@ -41,8 +41,8 @@ or equal to hidden dimension:
 - `zdim` <= `hdim`
 """
 function sample_params()
-	par_vec = (2 .^(4:9), 2 .^(2:7), 2 .^(2:7), 2 .^(1:6), 10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"], 1:Int(1e8))
-	argnames = (:hdim, :vdim, :cdim, :zdim, :lr, :nlayers, :batchsize, :activation, :init_seed)
+	par_vec = (2 .^(4:9), 2 .^(2:7), 2 .^(2:7), 2 .^(1:6), 10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"], ["scalar", "diag"], 1:Int(1e8))
+	argnames = (:hdim, :vdim, :cdim, :zdim, :lr, :nlayers, :batchsize, :activation, :var, :init_seed)
 	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
 	# ensure that zdim, cdim <= hdim
 	while parameters.cdim >= parameters.hdim
@@ -61,6 +61,7 @@ Negative ELBO for training of a Neural Statistician model.
 """
 loss(model::GenerativeModels.NeuralStatistician,x) = -elbo(model, x)
 
+using IPMeasures: _kld_gaussian
 (m::KLDivergence)(p::ConditionalDists.BMN, q::ConditionalDists.BMN) = IPMeasures._kld_gaussian(p,q)
 
 """

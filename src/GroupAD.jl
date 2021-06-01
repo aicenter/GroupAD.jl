@@ -14,6 +14,10 @@ using Mmap
 include("data.jl")
 include("experiments.jl")
 include("experiments_point_cloud.jl")
+include("exp_utils.jl")
 include("models/Models.jl")
+
+export load_data
+export expdir
 
 end #module

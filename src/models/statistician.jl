@@ -26,7 +26,7 @@ Constructs basic NeuralStatistician model.
     - `init_seed=nothing`: seed to initialize weights
 """
 function statistician_constructor(;idim::Int,hdim::Int,vdim::Int,cdim::Int,zdim::Int,
-    nlayers::Int=3,activation="relu",init_seed=nothing, kwargs...)
+    nlayers::Int=3,activation="relu",init_seed=nothing, var="scalar", kwargs...)
 
     (nlayers < 3) ? error("Less than 3 layers are not supported") : nothing
 
@@ -62,12 +62,20 @@ function statistician_constructor(;idim::Int,hdim::Int,vdim::Int,cdim::Int,zdim:
 	enc_z_dist = ConditionalMvNormal(enc_z)
 
     # decoder
-	dec = Chain(
-		build_mlp(zdim, hdim, hdim, nlayers - 1, activation=activation)...,
-		SplitLayer(hdim, [idim,1], [identity,safe_softplus])
-		)
-	dec_dist = ConditionalMvNormal(dec)
-
+	if var == "scalar"
+		dec = Chain(
+			build_mlp(zdim, hdim, hdim, nlayers - 1, activation=activation)...,
+			SplitLayer(hdim, [idim,1], [identity,safe_softplus])
+			)
+		dec_dist = ConditionalMvNormal(dec)
+	else
+		dec = Chain(
+			build_mlp(zdim, hdim, hdim, nlayers - 1, activation=activation)...,
+			SplitLayer(hdim, [idim,idim], [identity,safe_softplus])
+			)
+		dec_dist = ConditionalMvNormal(dec)
+	end
+	
     # reset seed
 	(init_seed !== nothing) ? Random.seed!() : nothing
 

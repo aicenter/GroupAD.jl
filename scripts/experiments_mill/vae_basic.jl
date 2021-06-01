@@ -36,9 +36,9 @@ modelname = "vae_basic"
 Should return a named tuple that contains a sample of model parameters.
 """
 function sample_params()
-	par_vec = (2 .^(3:8), 2 .^(4:9), 10f0 .^(-4:-3), 2 .^ (5:7), ["relu", "swish", "tanh"], 3:4, 1:Int(1e8),
+	par_vec = (2 .^(3:8), 2 .^(4:9), 10f0 .^(-4:-3), 2 .^ (5:7), ["relu", "swish", "tanh"], ["scalar", "diag"], 3:4, 1:Int(1e8),
 		["mean", "maximum", "median"])
-	argnames = (:zdim, :hdim, :lr, :batchsize, :activation, :nlayers, :init_seed, :aggregation)
+	argnames = (:zdim, :hdim, :lr, :batchsize, :activation, :var, :nlayers, :init_seed, :aggregation)
 	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
 	# ensure that zdim < hdim
 	while parameters.zdim >= parameters.hdim
@@ -94,7 +94,6 @@ function fit(data, parameters)
 
 	# now return the infor to be saved and an array of tuples (anomaly score function, hyperparatemers)
 	L=100
-	batchsize=512
 	training_info, [
 		(x -> GroupAD.Models.reconstruction_score(info.model,x,agf), 
 			merge(parameters, (score = "reconstruction",))),
