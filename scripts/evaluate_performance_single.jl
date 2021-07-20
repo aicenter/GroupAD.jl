@@ -14,7 +14,6 @@ using LinearAlgebra
 function compute_stats(f::String)
 	data = load(f)
 	println(abspath(f))
-	#map(p->println("$(p[1]) = $(p[2])"), collect(pairs(data[:parameters])))
 	scores_labels = [(data[:val_scores], data[:val_labels]), (data[:tst_scores], data[:tst_labels])]
 	setnames = ["validation", "test"]
 
@@ -38,8 +37,23 @@ function compute_stats(f::String)
 		push!(results, [auc, auprc, tpr5, f5])
 	end
 
-	DataFrame(measure = ["AUC", "AUPRC", "TPR@5", "F1@5"], validation = results[1], test = results[2])
+	@unpack dataset, seed, modelname, npars, parameters = data
+	score = parameters[:score]
+	d = @dict dataset seed modelname npars score
+	measures_val = Symbol.(["val_AUC", "val_AUPRC", "val_TPR_5", "val_F1_5"])
+	measures_test = Symbol.(["test_AUC", "test_AUPRC", "test_TPR_5", "test_F1_5"])
+	
+	for i in 1:length(measures_val)
+		d[measures_val[i]] = results[1][i]
+	end
+	
+	for i in 1:length(measures_test)
+		d[measures_test[i]] = results[2][i]
+	end
+	
+	safesave(datadir("experiments/contamination-0.0/vae_basic/MIL_results", savename(d, "bson")), d);
 end
+
 
 function query_stats(target::String)
 	if isfile(target)

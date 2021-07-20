@@ -104,12 +104,15 @@ function fit(data, parameters)
 	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
 	L=100
 	return training_info, [
-		(x -> GroupAD.Models.reconstruction_score(info.model,x), 
+		(x -> GroupAD.Models.likelihood(info.model,x), 
 			merge(parameters, (score = "reconstruction",))),
-		(x -> GroupAD.Models.reconstruction_score_mean(info.model,x), 
+		(x -> GroupAD.Models.mean_likelihood(info.model,x), 
 			merge(parameters, (score = "reconstruction-mean",))),
-		(x -> GroupAD.Models.reconstruction_score(info.model,x,L), 
-			merge(parameters, (score = "reconstruction-sampled", L=L)))
+		(x -> GroupAD.Models.likelihood(info.model,x,L), 
+			merge(parameters, (score = "reconstruction-sampled", L=L))),
+		#(x -> GroupAD.Models.instance_mean(...))
+		#Chamfer loss
+		# maybe MMD?
 	]
 end
 

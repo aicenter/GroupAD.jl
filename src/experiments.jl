@@ -36,6 +36,86 @@ function experiment(score_fun, parameters, data, savepath; verb=true, save_resul
 end
 
 """
+
+Evaluate likelihoods and save all the possible corrections.
+Saves 6 scores in total:
+- sum of likelihoods
+- sum + Poisson fit
+- sum + LogNormal fit
+- sum + logU
+- sum + Poisson fit + logU
+- sum + LogNormal fit + logU
+"""
+function experiment_bag(score_fun, parameters, data, savepath; verb=true, save_result=true, save_entries...)
+	tr_data, val_data, tst_data = data
+
+	# unpack data for easier manipulation
+	train, _ = unpack_mill(tr_data)
+	val, _ = unpack_mill(val_data)
+	test, _ = unpack_mill(tst_data)
+
+	# fit MLE cardinality distribution to data
+	bag_sizes = size.(train,1)
+	poisson, poisson_eval_t = @timed fit_mle(Poisson, bag_sizes)
+	lognormal, lognormal_eval_t = @timed fit_mle(LogNormal, bag_sizes)
+
+	# calculate likelihoods
+	tr_lh, tr_eval_t, _, _, _ = @timed score_fun(train)
+	val_lh, val_eval_t, _, _, _ = @timed score_fun(val)
+	tst_lh, tst_eval_t, _, _, _ = @timed score_fun(test)
+
+	logU, logU_eval_t, _, _, _ = @timed calculate_logU(tr_lh)
+
+	# possible scores as anonymous functions
+	scores = [
+		x -> rec_score_from_likelihood(x),
+		x -> rec_score_from_likelihood(x, poisson),
+		x -> rec_score_from_likelihood(x, lognormal),
+		x -> rec_score_from_likelihood(x, logU),
+		x -> rec_score_from_likelihood(x, poisson, logU),
+		x -> rec_score_from_likelihood(x, lognormal, logU)
+	]
+
+	# helpful vectors
+	eval_times = [0, poisson_eval_t, lognormal_eval_t, logU_eval_t, poisson_eval_t + logU_eval_t, lognormal_eval_t + logU_eval_t]
+	reconstruction_names = [
+		"sum",
+		"poisson",
+		"lognormal",
+		"logU",
+		"poisson+logU",
+		"lognormal+logU"
+	]
+
+	# calculate all the possible scores and save them
+	for (i, final_score) in enumerate(scores)
+		tr_scores = final_score(tr_lh)
+		val_scores = final_score(val_lh)
+		tst_scores = final_score(tst_lh)
+
+		# now save the stuff
+		savef = joinpath(savepath, savename(merge(parameters, (corr = reconstruction_names[i],)), "bson", digits=5))
+		result = (
+			parameters = parameters,
+			tr_scores = tr_scores,
+			tr_labels = tr_data[2], 
+			tr_eval_t = tr_eval_t + eval_times[i],
+			val_scores = val_scores,
+			val_labels = val_data[2], 
+			val_eval_t = val_eval_t + eval_times[i],
+			tst_scores = tst_scores,
+			tst_labels = tst_data[2], 
+			tst_eval_t = tst_eval_t + eval_times[i]
+			)
+		result = Dict{Symbol, Any}([sym=>val for (sym,val) in pairs(merge(result, save_entries))]) # this has to be a Dict 
+		if save_result
+			tagsave(savef, result, safe = true)
+			verb ? (@info "Results saved to $savef") : nothing
+		end
+	end
+end
+
+"""
 	edit_params(data, parameters)
 This modifies parameters according to data. Default version only returns the input arg. 
 Overload for models where this is needed.
@@ -131,7 +211,11 @@ function basic_experimental_loop(sample_params_f, fit_f, edit_params_f,
 
 				# now loop over all anomaly score funs
 				for result in results
-					experiment(result..., data, _savepath; save_entries...)
+					if modelname in ["vae_instance", "statistician"]
+						experiment_bag(result..., data, _savepath; save_entries...)
+					else
+						experiment(result..., data, _savepath; save_entries...)
+					end
 				end
 				try_counter = max_tries + 1
 			else
