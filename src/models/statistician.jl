@@ -75,18 +75,6 @@ function statistician_constructor(;idim::Int,hdim::Int,vdim::Int,cdim::Int,zdim:
 	model = NeuralStatistician(instance_enc, cdim, enc_c_dist, cond_z_dist, enc_z_dist, dec_dist)
 end
 
-"""
-	unpack_mill(dt)
-
-Takes Tuple of BagNodes and bag labels and returns
-both in a format that is fit for Flux.train!
-"""
-function unpack_mill(dt)
-    bag_labels = dt[2]
-	bag_data = [dt[1][i].data.data for i in 1:length(bag_labels)]
-    return bag_data, bag_labels
-end
-
 
 """
     RandomBagBatches(data;batchsize::Int=32,randomize=true)
@@ -195,12 +183,12 @@ end
 
 # anomaly score functions
 """
-	reconstruct(model::NeuralStatistician, bag)
+	reconstruct_input(model::NeuralStatistician, bag)
 
 Data reconstruction for NeuralStatistician.
 Data must be bags!
 """
-function reconstruct(model::NeuralStatistician, bag)
+function reconstruct_input(model::NeuralStatistician, bag)
 	v = model.instance_encoder(bag)
 	p = mean(v, dims=2)
 	c = rand(model.encoder_c, p)
@@ -208,6 +196,45 @@ function reconstruct(model::NeuralStatistician, bag)
 	z = rand(model.encoder_z, h)
 	mean(model.decoder, z)
 end
+
+"""
+	likelihood(model::NeuralStatistician, bag, [L])
+
+Calculates likelihood of a single bag. If L is provided,
+returns the sampled likelihood(mean).
+"""
+function likelihood(model::NeuralStatistician, bag)
+    v = model.instance_encoder(bag)
+	p = mean(v,dims=2)
+	c = rand(model.encoder_c, p)
+	h = hcat([vcat(v[1:end,i], c) for i in 1:size(v, 2)]...)
+	z = rand(model.encoder_z, h)
+    -logpdf(model.decoder, bag, z)
+end
+function likelihood(model::NeuralStatistician, bag, L::Int)
+    l = hcat([likelihood(model, bag) for _ in 1:L]...)
+    return mean(l, dims=2)
+end
+
+"""
+	mean_likelihood(model::NeuralStatistician, bag)
+
+Calculates the mean likelihood of a bag.
+"""
+function mean_likelihood(model::NeuralStatistician, bag)
+    v = model.instance_encoder(bag)
+    p = mean(v,dims=2)
+    c = mean(model.encoder_c, p)
+    h = hcat([vcat(v[1:end,i], c) for i in 1:size(v, 2)]...)
+    z = mean(model.encoder_z, h)
+    -logpdf(model.decoder, bag, z)
+end
+
+
+
+##################
+### Deprecated ###
+##################
 
 """
 	encode_context(model::NeuralStatistician, bag)
@@ -218,20 +245,6 @@ function encode_mean(model::NeuralStatistician, bag)
 	v = model.instance_encoder(bag)
 	p = mean(v, dims=2)
 	c = mean(model.encoder_c, p)
-end
-
-"""
-	likelihood(model::NeuralStatistician, bag)
-
-Calculates likelihood of a single bag.
-"""
-function likelihood(model::NeuralStatistician, bag)
-    v = model.instance_encoder(bag)
-	p = mean(v,dims=2)
-	c = rand(model.encoder_c, p)
-	h = hcat([vcat(v[1:end,i], c) for i in 1:size(v, 2)]...)
-	z = rand(model.encoder_z, h)
-    llh = -logpdf(model.decoder, bag, z)
 end
 
 """

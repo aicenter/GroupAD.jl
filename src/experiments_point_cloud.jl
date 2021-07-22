@@ -74,7 +74,11 @@ function point_cloud_experimental_loop(sample_params_f, fit_f, edit_params_f,
 
 					# now loop over all anomaly score funs
 					for result in results
-						experiment(result..., data, _savepath; save_entries...)
+						if modelname in ["vae_instance", "statistician"]
+							experiment_bag(result..., data, _savepath; save_entries...)
+						else
+							experiment(result..., data, _savepath; save_entries...)
+						end
 					end
 					try_counter = max_tries + 1
 				else

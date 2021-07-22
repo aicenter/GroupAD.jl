@@ -10,6 +10,7 @@ using FileIO
 using BSON
 using DataDeps
 using Mmap
+using Distributions
 
 include("data.jl")
 include("experiments.jl")

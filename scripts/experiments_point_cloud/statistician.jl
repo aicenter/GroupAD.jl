@@ -110,9 +110,8 @@ function fit(data, parameters)
 			merge(parameters, (score = "reconstruction-mean",))),
 		(x -> GroupAD.Models.likelihood(info.model,x,L), 
 			merge(parameters, (score = "reconstruction-sampled", L=L))),
-		#(x -> GroupAD.Models.instance_mean(...))
-		#Chamfer loss
-		# maybe MMD?
+		(x -> GroupAD.Models.reconstruct_input(info.model, x),
+			merge(parameters, (score = "reconstructed_input",)))
 	]
 end
 
