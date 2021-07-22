@@ -301,7 +301,7 @@ function basic_experimental_loop(sample_params_f, fit_f, edit_params_f,
 				save_entries = merge(training_info, (modelname = modelname, seed = seed, dataset = dataset))
 
 				# now loop over all anomaly score funs
-				for result in results
+				@time for result in results
 					if modelname in ["vae_instance", "statistician"]
 						experiment_bag(result..., data, _savepath; save_entries...)
 					else

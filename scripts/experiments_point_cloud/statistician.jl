@@ -86,7 +86,7 @@ function fit(data, parameters)
 	# fit train data
 	try
 		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=82800/max_seed/anomaly_classes, 
-			patience=20, check_interval=5, parameters...)
+			patience=1, check_interval=1, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
 		@info "Failed training due to \n$e"
@@ -102,7 +102,7 @@ function fit(data, parameters)
 		)
 
 	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
-	L=100
+	L=20
 	return training_info, [
 		(x -> GroupAD.Models.likelihood(info.model,x), 
 			merge(parameters, (score = "reconstruction",))),

@@ -27,13 +27,16 @@ mmd_score(X, Y, kernel, bw) = map((x, y) -> mmd(kernel(bw), x, y), X, Y)
 
 Calculates the median distance of instances to estimate the bandwidth for
 Gaussian and IMQ kernels in MMD. `x` should be training data.
+
+If data is too large, only takes a 5000 instances as a subsample and
+calculates the bandwidth only from the subset.
 """
 function mmd_bandwidth(x)
     X = hcat(x...)
     sz = size(X, 2)
     # downsample if the number of instances is large
     n = 5000
-    if n > sz
+    if sz > n
         # calculate the bandwidth for the kernel
         return bw = median(pairwise(Euclidean(), X[:,sample(1:sz,n)], dims=2))
     else
@@ -54,16 +57,40 @@ should be (might be):
            one instance in the bag is anomalous)
 """
 rec_score_from_likelihood(lh, sizes, fun=sum::Function) = map(x -> fun(x), lh)
+
+"""
+    rec_score_from_likelihood(lh, sizes, pc<:Distribution)
+
+Returns reconstruction score from instance likelihoods
+for individual bags using sum of instance likelihoods.
+Corrected with the cardinality distribution.
+"""
 function rec_score_from_likelihood(lh, sizes, pc::T) where T <: Distribution
     s = map(x -> sum(x), lh)
     c = -logpdf.(pc, sizes)
     return s .+ c
 end
+
+"""
+    rec_score_from_likelihood(lh, sizes, logU::AbstractFloat)
+
+Returns reconstruction score from instance likelihoods
+for individual bags using sum of instance likelihoods.
+Corrected with the logU constant.
+"""
 function rec_score_from_likelihood(lh, sizes, logU::AbstractFloat)
     s = map(x -> sum(x), lh)
     nU = logU .* sizes
     return s .- nU
 end
+
+"""
+    rec_score_from_likelihood(lh, sizes, pc<:Distribution, logU::AbstractFloat)
+
+Returns reconstruction score from instance likelihoods
+for individual bags using sum of instance likelihoods.
+Corrected with both cardinality distribution and the logU constant.
+"""
 function rec_score_from_likelihood(lh, sizes, pc::T, logU::AbstractFloat) where T <: Distribution
     s = map(x -> sum(x), lh)
     c = -logpdf(pc, sizes)
