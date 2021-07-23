@@ -1,7 +1,7 @@
 using Flux
 using ConditionalDists
 using GenerativeModels
-import GenerativeModels: NeuralStatistician
+import GenerativeModels: NeuralStatistician, elbo
 using ValueHistories
 using MLDataPattern: RandomBatches
 using Distributions
@@ -26,7 +26,7 @@ Constructs basic NeuralStatistician model.
     - `init_seed=nothing`: seed to initialize weights
 """
 function statistician_constructor(;idim::Int,hdim::Int,vdim::Int,cdim::Int,zdim::Int,
-    nlayers::Int=3,activation="relu",init_seed=nothing, kwargs...)
+    var::String="scalar", nlayers::Int=3,activation="relu",init_seed=nothing, kwargs...)
 
     (nlayers < 3) ? error("Less than 3 layers are not supported") : nothing
 
@@ -62,17 +62,57 @@ function statistician_constructor(;idim::Int,hdim::Int,vdim::Int,cdim::Int,zdim:
 	enc_z_dist = ConditionalMvNormal(enc_z)
 
     # decoder
-	dec = Chain(
-		build_mlp(zdim, hdim, hdim, nlayers - 1, activation=activation)...,
-		SplitLayer(hdim, [idim,1], [identity,safe_softplus])
-		)
-	dec_dist = ConditionalMvNormal(dec)
+	if var == "scalar"
+		dec = Chain(
+			build_mlp(zdim,hdim,hdim,nlayers-1,activation=activation)...,
+			SplitLayer(hdim, [idim,1], [identity,softplus])
+			)
+		dec_dist = ConditionalMvNormal(dec)
+	else
+		dec = Chain(
+			build_mlp(zdim,hdim,hdim,nlayers-1,activation=activation)...,
+			SplitLayer(hdim, [idim,idim], [identity,softplus])
+			)
+		dec_dist = ConditionalMvNormal(dec)
+	end
 
     # reset seed
 	(init_seed !== nothing) ? Random.seed!() : nothing
 
     # get NeuralStatistician model
 	model = NeuralStatistician(instance_enc, cdim, enc_c_dist, cond_z_dist, enc_z_dist, dec_dist)
+end
+
+"""
+    elbo(m::NeuralStatistician,x::AbstractArray; β1=1.0, β2=1.0)
+Neural Statistician log-likelihood lower bound.
+For a Neural Statistician model, simply create a loss
+function as
+    
+    `loss(x) = -elbo(model,x)`
+where `model` is a NeuralStatistician type.
+The β terms scale the KLDs:
+* β1: KL[q(c|D) || p(c)]
+* β2: KL[q(z|c,x) || p(z|c)]
+"""
+function elbo1(m::NeuralStatistician, x::AbstractArray;β1=1.0,β2=1.0)
+    # instance network
+    v = m.instance_encoder(x)
+    p = mean(v, dims=2)
+
+    # sample latent for context
+    c = rand(m.encoder_c, p)
+	C = reshape(repeat(c, size(v,2)),size(c,1),size(v,2))
+
+    # sample latent for instances
+    h = vcat(v,C)
+    z = rand(m.encoder_z, h)
+	
+    # 3 terms - likelihood, kl1, kl2
+    llh = mean(logpdf(m.decoder, x, z))
+    kld1 = mean(kl_divergence(condition(m.encoder_c, v), m.prior_c))
+    kld2 = mean(kl_divergence(condition(m.encoder_z, h), condition(m.conditional_z, c)))
+    llh - β1 * kld1 - β2 * kld2
 end
 
 
@@ -206,8 +246,9 @@ returns the sampled likelihood(mean).
 function likelihood(model::NeuralStatistician, bag)
     v = model.instance_encoder(bag)
 	p = mean(v,dims=2)
-	c = rand(model.encoder_c, p)
-	h = hcat([vcat(v[1:end,i], c) for i in 1:size(v, 2)]...)
+    c = rand(model.encoder_c, p)
+    C = reshape(repeat(c, size(v,2)),size(c,1),size(v,2))
+    h = vcat(v,C)
 	z = rand(model.encoder_z, h)
     -logpdf(model.decoder, bag, z)
 end
@@ -224,8 +265,9 @@ Calculates the mean likelihood of a bag.
 function mean_likelihood(model::NeuralStatistician, bag)
     v = model.instance_encoder(bag)
     p = mean(v,dims=2)
-    c = mean(model.encoder_c, p)
-    h = hcat([vcat(v[1:end,i], c) for i in 1:size(v, 2)]...)
+	c = rand(model.encoder_c, p)
+    C = reshape(repeat(c, size(v,2)),size(c,1),size(v,2))
+    h = vcat(v,C)
     z = mean(model.encoder_z, h)
     -logpdf(model.decoder, bag, z)
 end

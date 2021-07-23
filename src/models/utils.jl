@@ -38,8 +38,13 @@ end
 Takes Tuple of BagNodes and bag labels and returns
 both in a format that is fit for Flux.train!
 """
-function unpack_mill(dt)
+function unpack_mill(dt::T) where T <: Tuple{BagNode,Any}
     bag_labels = dt[2]
 	bag_data = [dt[1][i].data.data for i in 1:length(bag_labels)]
+    return bag_data, bag_labels
+end
+function unpack_mill(dt::T) where T <: Tuple{Array,Any}
+    bag_labels = dt[2]
+	bag_data = dt[1]
     return bag_data, bag_labels
 end

@@ -67,7 +67,7 @@ Corrected with the cardinality distribution.
 """
 function rec_score_from_likelihood(lh, sizes, pc::T) where T <: Distribution
     s = map(x -> sum(x), lh)
-    c = -logpdf.(pc, sizes)
+    c = -logpdf(pc, sizes)
     return s .+ c
 end
 
@@ -80,7 +80,7 @@ Corrected with the logU constant.
 """
 function rec_score_from_likelihood(lh, sizes, logU::AbstractFloat)
     s = map(x -> sum(x), lh)
-    nU = logU .* sizes
+    nU = logU * sizes
     return s .- nU
 end
 
@@ -94,6 +94,6 @@ Corrected with both cardinality distribution and the logU constant.
 function rec_score_from_likelihood(lh, sizes, pc::T, logU::AbstractFloat) where T <: Distribution
     s = map(x -> sum(x), lh)
     c = -logpdf(pc, sizes)
-    nU = logU .* sizes
+    nU = logU * sizes
     return s .+ c .- nU
 end
