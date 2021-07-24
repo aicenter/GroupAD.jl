@@ -57,18 +57,15 @@ end
 	experiment_likelihoods(score_fun, parameters, data, savepath; verb=true, save_result=true, save_entries...)
 
 Evaluate likelihoods and save all the possible corrections.
-Saves 6 scores in total:
-- sum of likelihoods
+Saves 8 scores in total:
+- sum of instance likelihoods
+- mean of instance likelihoods
+- maximum of instance likelihoods
 - sum + Poisson fit
 - sum + LogNormal fit
 - sum + logU
 - sum + Poisson fit + logU
-- sum + LogNormal fit + logU
-
-Note: There can be more - instance mean, instance maximum...
-
-Add some if which will determine which results to calculate based on either reconstruction (likelihood)
-or true reconstructed output.
+- sum + LogNormal fit + logU.
 """
 function experiment_likelihoods(score_fun, parameters, data, savepath; verb=true, save_result=true, save_entries...)
 	tr_data, val_data, tst_data = data
@@ -95,7 +92,9 @@ function experiment_likelihoods(score_fun, parameters, data, savepath; verb=true
 
 	# possible scores as anonymous functions
 	scores = [
-		(x, s) -> GroupAD.Models.rec_score_from_likelihood(x, s),
+		(x, s) -> GroupAD.Models.rec_score_from_likelihood(x, s, fun=sum),
+		(x, s) -> GroupAD.Models.rec_score_from_likelihood(x, s, fun=mean),
+		(x, s) -> GroupAD.Models.rec_score_from_likelihood(x, s, fun=maximum),
 		(x, s) -> GroupAD.Models.rec_score_from_likelihood(x, s, poisson),
 		(x, s) -> GroupAD.Models.rec_score_from_likelihood(x, s, lognormal),
 		(x, s) -> GroupAD.Models.rec_score_from_likelihood(x, s, logU),
@@ -104,9 +103,18 @@ function experiment_likelihoods(score_fun, parameters, data, savepath; verb=true
 	]
 
 	# helpful vectors
-	eval_times = [0, poisson_eval_t, lognormal_eval_t, logU_eval_t, poisson_eval_t + logU_eval_t, lognormal_eval_t + logU_eval_t]
+	eval_times = [
+		0, 0, 0,
+		poisson_eval_t,
+		lognormal_eval_t,
+		logU_eval_t,
+		poisson_eval_t + logU_eval_t,
+		lognormal_eval_t + logU_eval_t]
+		
 	score_names = [
 		"sum",
+		"mean",
+		"maximum,"
 		"poisson",
 		"lognormal",
 		"logU",
@@ -134,7 +142,7 @@ function experiment_likelihoods(score_fun, parameters, data, savepath; verb=true
 			tst_scores = tst_scores,
 			tst_labels = tst_data[2], 
 			tst_eval_t = tst_eval_t + eval_times[i] + likelihoods_time[3]
-			)
+		)
 		result = Dict{Symbol, Any}([sym=>val for (sym,val) in pairs(merge(result, save_entries))]) # this has to be a Dict 
 		if save_result
 			tagsave(savef, result, safe = true)
@@ -167,18 +175,22 @@ function experiment_reconstructed_input(score_fun, parameters, data, savepath; v
 	val_rec, val_rec_t, _, _, _ = @timed score_fun.(val)
 	tst_rec, tst_rec_t, _, _, _ = @timed score_fun.(test)
 
+	# convenience vectors
 	eval_times = [tr_rec_t, val_rec_t, tst_rec_t]
 	score_names = ["chamfer", "MMD-GaussianKernel", "MMD-IMQKernel"]
 
+	# calculate bandwidth for MMD and save the time
 	bw, bw_t, _, _, _ = @timed GroupAD.Models.mmd_bandwidth(train)
 	bw_time = [0, bw_t, bw_t]
 
+	# create the scores
 	scores = [
-		(x,y) -> GroupAD.Models.chamfer_score(x,y),
+		(x,y) -> GroupAD.Models.chamfer_score(x, y),
 		(x,y) -> GroupAD.Models.mmd_score(x, y, GroupAD.Models.GaussianKernel, bw),
 		(x,y) -> GroupAD.Models.mmd_score(x, y, GroupAD.Models.IMQKernel, bw)
 	]
 
+	# calculate and save the scores
 	for (i, final_score) in enumerate(scores)
 		tr_scores, tr_eval_t, _, _, _ = @timed final_score(train, tr_rec)
 		val_scores, val_eval_t, _, _, _ = @timed final_score(val, val_rec)

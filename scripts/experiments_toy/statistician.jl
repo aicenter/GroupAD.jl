@@ -19,13 +19,17 @@ s = ArgParseSettings()
         default = "toy"
         arg_type = String
         help = "dataset"
+	"type"
+        default = 1
+        arg_type = Int
+        help = "type of toy dataset"
    "contamination"
         default = 0.0
         arg_type = Float64
         help = "training data contamination rate"
 end
 parsed_args = parse_args(ARGS, s)
-@unpack dataset, max_seed, contamination = parsed_args
+@unpack dataset, max_seed, type, contamination = parsed_args
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
@@ -59,7 +63,7 @@ end
 
 Negative ELBO for training of a Neural Statistician model.
 """
-loss(model::GenerativeModels.NeuralStatistician,x) = -elbo(model, x)
+loss(model::GenerativeModels.NeuralStatistician,x) = -elbo1(model, x)
 
 (m::KLDivergence)(p::ConditionalDists.BMN, q::ConditionalDists.BMN) = IPMeasures._kld_gaussian(p,q)
 
@@ -125,6 +129,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		fit, 
 		edit_params, 
 		max_seed, 
+		type, 
 		modelname, 
 		dataset,
 		datadir("experiments/contamination-$(contamination)")

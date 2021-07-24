@@ -9,6 +9,11 @@ the loaded data.
 
 This function works for point cloud datasets. Differentiation between leave-one-in and leave-one-out
 setting is done parameter `method`.
+
+The calculation is run in parallel over seeds. It is to be determined how many cores will
+be used and what the max training time will be. Have in mind that statistician is slower to learn
+and might need smaller check time (prob. 1 or 2 might be best) and it will take time to calculate
+all the scores.
 """
 function point_cloud_experimental_loop(sample_params_f, fit_f, edit_params_f, 
 	max_seed, modelname, dataset, contamination, savepath, anomaly_classes, method)
@@ -22,6 +27,7 @@ function point_cloud_experimental_loop(sample_params_f, fit_f, edit_params_f,
 		parameters = sample_params_f()
 
 		# run over all classes with the same hyperparameters
+		# use more CPU cores for calculation
 		Threads.@threads for seed in 1:max_seed
 			# with these hyperparameters, train and evaluate the model on different train/val/tst splits
 			# load data for either "MNIST_in" or "MNIST_out" and set the setting
@@ -95,9 +101,11 @@ end
 """
 	basic_experimental_loop_toy(sample_params_f, fit_f, edit_params_f, 
 		max_seed, modelname, dataset, contamination, savepath)
+
+Experimental loop for toy dataset.
 """
 function basic_experimental_loop_toy(sample_params_f, fit_f, edit_params_f, 
-		max_seed, modelname, dataset, savepath)
+		max_seed, type, modelname, dataset, savepath)
 	# set a maximum for parameter sampling retries
 	# this is here because you might sample the same parameters of an already trained model
 	# in that case this loop runs again, for a total of 10 tries
@@ -114,7 +122,7 @@ function basic_experimental_loop_toy(sample_params_f, fit_f, edit_params_f,
 			mkpath(_savepath)
 
 			# get data
-			data = load_data(dataset, 120, 120; seed=seed, type=1)
+			data = load_data(dataset, 120, 120; seed=seed, type=type)
 			@info "Data created..."
 
 			# edit parameters

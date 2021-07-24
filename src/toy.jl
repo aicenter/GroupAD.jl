@@ -1,11 +1,14 @@
 """
-    generate_cardinality_toy(Nn,Na;type=1)
+    generate_cardinality_toy(Nn,Na;type=1,seed=nothing)
 
 Generate dataset from "Apple Paper". There are three types
 of datasets. For more info go to Figure 7 in
 Model-Based Learning for Point Patter Data.
 """
-function generate_cardinality_toy(Nn,Na;type=1)
+function generate_cardinality_toy(Nn,Na;type=1,seed=nothing)
+    # set seed
+    (seed === nothing) ? nothing : Random.seed!(seed)
+
     # normal data is always the same
     normal_d = MvNormal([6,6],sqrt.([6,2]))
     anomalous_d = MvNormal([1,1],sqrt.([6,2]))
@@ -28,6 +31,10 @@ function generate_cardinality_toy(Nn,Na;type=1)
         # 3) low cardinality novelty overlap with normal data
         anomalous = [rand(normal_d,rand(Poisson(6))) for i in 1:Na]
     end
+    
+    # reset seed
+    (seed === nothing) ? nothing : Random.seed!()
+
     return normal, anomalous
 end
 
@@ -40,17 +47,20 @@ There is no contamination parameter.
 """
 function create_apple_toy(Nn=30, Na=30; type=1, seed=nothing)
     # train data
-    normal, _ = generate_cardinality_toy(Nn, Na, type=type)
-    train_data = normal
-    train_labels = zeros(Int, Nn)
+    normal, anomalous = generate_cardinality_toy(Nn*3, Na*2, type=type, seed=seed)
+    
+    # train data
+    train_data = normal[1:Nn]
+    train_labels = zeros(Nn)
+
     # validation data
-    n,a = generate_cardinality_toy(Nn, Na,type=type)
-    val_data = vcat(n,a)
-    val_labels = vcat(zeros(Int,Nn),ones(Int,Na))
+    val_data = vcat(normal[Nn+1:Nn*2],anomalous[1:Na])
+    val_labels = vcat(zeros(Nn), ones(Na))
+
     # test data
-    n,a = generate_cardinality_toy(Nn, Na,type=type)
-    test_data = vcat(n,a)
-    test_labels = vcat(zeros(Int,Nn),ones(Int,Na))
+    test_data = vcat(normal[2*Nn+1:end],anomalous[Na+1:end])
+    test_labels = vcat(zeros(Nn), ones(Na))
+
     return ((train_data, train_labels), (val_data, val_labels), (test_data, test_labels))
 end
 

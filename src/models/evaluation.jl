@@ -56,7 +56,7 @@ should be (might be):
 - maximum (might be better for those datasets where a bag is anomalous if at least
            one instance in the bag is anomalous)
 """
-rec_score_from_likelihood(lh, sizes, fun=sum::Function) = map(x -> fun(x), lh)
+rec_score_from_likelihood(lh, sizes; fun=sum::Function) = map(x -> fun(x), lh)
 
 """
     rec_score_from_likelihood(lh, sizes, pc<:Distribution)

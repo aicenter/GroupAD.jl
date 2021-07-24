@@ -43,9 +43,10 @@ modelname = "statistician"
 	sample_params()
 
 Should return a named tuple that contains a sample of model parameters.
-For NeuralStatistician, latent dimensions cdim and zdim should be smaller
+For NeuralStatistician, latent dimensions vdim, cdim and zdim should be smaller
 or equal to hidden dimension:
 - `cdim` <= `hdim`
+- `vdim` <= `hdim`
 - `zdim` <= `hdim`
 """
 function sample_params()
@@ -53,7 +54,7 @@ function sample_params()
 	argnames = (:hdim, :vdim, :cdim, :zdim, :var, :lr, :nlayers, :batchsize, :activation, :init_seed)
 	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
 	# ensure that vdim, zdim, cdim <= hdim
-	while parameters.cdim >= parameters.hdim
+	while parameters.vdim >= parameters.hdim
 		parameters = merge(parameters, (cdim = sample(par_vec[2]),))
 	end
 	while parameters.cdim >= parameters.hdim
@@ -105,7 +106,10 @@ function fit(data, parameters)
 		)
 
 	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
+	# for Point clouds, only 50 samples to ensure quicker calculation
 	L=50
+	# the returned scores are only to either calculate likelihood or reconstruction of input
+	# the score functions themselves are inside experimental loop
 	return training_info, [
 		(x -> GroupAD.Models.likelihood(info.model,x), 
 			merge(parameters, (score = "reconstruction",))),
@@ -120,6 +124,7 @@ end
 
 """
 	edit_params(data, parameters)
+	
 This modifies parameters according to data. Default version only returns the input arg. 
 Overload for models where this is needed.
 """

@@ -84,7 +84,7 @@ function statistician_constructor(;idim::Int,hdim::Int,vdim::Int,cdim::Int,zdim:
 end
 
 """
-    elbo(m::NeuralStatistician,x::AbstractArray; β1=1.0, β2=1.0)
+    elbo1(m::NeuralStatistician,x::AbstractArray; β1=1.0, β2=1.0)
 Neural Statistician log-likelihood lower bound.
 For a Neural Statistician model, simply create a loss
 function as
@@ -94,6 +94,9 @@ where `model` is a NeuralStatistician type.
 The β terms scale the KLDs:
 * β1: KL[q(c|D) || p(c)]
 * β2: KL[q(z|c,x) || p(z|c)]
+
+This function uses a speed-up concatenation of `v` and `c` which
+allocates less memory and should be more efficient.
 """
 function elbo1(m::NeuralStatistician, x::AbstractArray;β1=1.0,β2=1.0)
     # instance network
@@ -120,7 +123,8 @@ end
     RandomBagBatches(data;batchsize::Int=32,randomize=true)
 
 Creates random batch for bag data which are an array of
-arrays.
+arrays. If data length is smaller than batchsize, returns
+the full data.
 """
 function RandomBagBatches(data;batchsize::Int=32,randomize=true)
     l = length(data)
@@ -140,6 +144,8 @@ end
 """
 	StatsBase.fit!(model::NeuralStatistician, data::Tuple, loss::Function; max_train_time=82800, lr=0.001, 
 		batchsize=64, patience=30, check_interval::Int=10, kwargs...)
+
+Function to fit NeuralStatistician model.
 """
 function StatsBase.fit!(model::NeuralStatistician, data::Tuple, loss::Function;
 	max_iters=10000, max_train_time=82800, lr=0.001, batchsize=64, patience=30,
@@ -231,8 +237,9 @@ Data must be bags!
 function reconstruct_input(model::NeuralStatistician, bag)
 	v = model.instance_encoder(bag)
 	p = mean(v, dims=2)
-	c = rand(model.encoder_c, p)
-	h = hcat([vcat(v[1:end,i], c) for i in 1:size(v, 2)]...)
+    c = rand(model.encoder_c, p)
+    C = reshape(repeat(c, size(v,2)),size(c,1),size(v,2))
+    h = vcat(v,C)
 	z = rand(model.encoder_z, h)
 	mean(model.decoder, z)
 end
@@ -241,7 +248,7 @@ end
 	likelihood(model::NeuralStatistician, bag, [L])
 
 Calculates likelihood of a single bag. If L is provided,
-returns the sampled likelihood(mean).
+returns the sampled likelihood (mean).
 """
 function likelihood(model::NeuralStatistician, bag)
     v = model.instance_encoder(bag)
@@ -265,7 +272,7 @@ Calculates the mean likelihood of a bag.
 function mean_likelihood(model::NeuralStatistician, bag)
     v = model.instance_encoder(bag)
     p = mean(v,dims=2)
-	c = rand(model.encoder_c, p)
+	c = rand(model.encoder_c, p) # should there be mean?
     C = reshape(repeat(c, size(v,2)),size(c,1),size(v,2))
     h = vcat(v,C)
     z = mean(model.encoder_z, h)
