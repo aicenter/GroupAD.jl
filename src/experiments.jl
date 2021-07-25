@@ -114,7 +114,7 @@ function experiment_likelihoods(score_fun, parameters, data, savepath; verb=true
 	score_names = [
 		"sum",
 		"mean",
-		"maximum,"
+		"maximum,",
 		"poisson",
 		"lognormal",
 		"logU",

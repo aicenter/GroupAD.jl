@@ -8,12 +8,12 @@ that is supposed to construct and fit a model and finally evaluates the returned
 the loaded data.
 
 This function works for point cloud datasets. Differentiation between leave-one-in and leave-one-out
-setting is done parameter `method`.
+setting is done via parameter `method`.
 
 The calculation is run in parallel over seeds. It is to be determined how many cores will
 be used and what the max training time will be. Have in mind that statistician is slower to learn
 and might need smaller check time (prob. 1 or 2 might be best) and it will take time to calculate
-all the scores.
+all the scores for larger model (with more neurons).
 """
 function point_cloud_experimental_loop(sample_params_f, fit_f, edit_params_f, 
 	max_seed, modelname, dataset, contamination, savepath, anomaly_classes, method)
@@ -104,7 +104,7 @@ end
 
 Experimental loop for toy dataset.
 """
-function basic_experimental_loop_toy(sample_params_f, fit_f, edit_params_f, 
+function toy_experimental_loop(sample_params_f, fit_f, edit_params_f, 
 		max_seed, type, modelname, dataset, savepath)
 	# set a maximum for parameter sampling retries
 	# this is here because you might sample the same parameters of an already trained model
