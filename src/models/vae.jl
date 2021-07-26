@@ -166,6 +166,11 @@ function StatsBase.fit!(model::VAE, data::Tuple, loss::Function; max_iters=10000
 end
 
 # likelihood functions
+"""
+	likelihood(model::VAE, bag)
+
+Calculates the instance likelihoods for the VAE model.
+"""
 function likelihood(model::VAE, bag)
 	p = condition(model.decoder, rand(model.encoder, bag))
 	-logpdf(p, bag)
