@@ -52,10 +52,10 @@ function sample_params()
 
 	# ensure that vdim, zdim, cdim <= hdim
 	while parameters.vdim >= parameters.hdim
-		parameters = merge(parameters, (cdim = sample(par_vec[2]),))
+		parameters = merge(parameters, (vdim = sample(par_vec[2]),))
 	end
 	while parameters.cdim >= parameters.hdim
-		parameters = merge(parameters, (vdim = sample(par_vec[3]),))
+		parameters = merge(parameters, (cdim = sample(par_vec[3]),))
 	end
 	while parameters.zdim >= parameters.hdim
 		parameters = merge(parameters, (zdim = sample(par_vec[4]),))

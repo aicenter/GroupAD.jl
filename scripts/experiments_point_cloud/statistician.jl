@@ -50,7 +50,7 @@ or equal to hidden dimension:
 - `zdim` <= `hdim`
 """
 function sample_params()
-	par_vec = (2 .^(2:8), 2 .^(1:5), 2 .^(1:5), 2 .^(1:5), ["scalar", "diagonal"], 10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"], 1:Int(1e8))
+	par_vec = (2 .^(2:7), 2 .^(1:5), 2 .^(1:5), 2 .^(1:5), ["scalar", "diagonal"], 10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"], 1:Int(1e8))
 	argnames = (:hdim, :vdim, :cdim, :zdim, :var, :lr, :nlayers, :batchsize, :activation, :init_seed)
 	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
 
@@ -89,8 +89,13 @@ function fit(data, parameters)
 	model = GroupAD.Models.statistician_constructor(;idim=size(data[1][1],1), parameters...)
 
 	# fit train data
+	# max. train time: 48 hours, over 5 CPU cores -> 2.4 hours of training for each model
+	# the full traning time should be 72 hours to ensure all scores are calculated
+	# training time is decreased automatically for less cores!
 	try
-		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=82800/max_seed/5, 
+		# number of available cores
+		cores = Threads.nthreads()
+		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=48*3600*cores/max_seed/anomaly_classes, 
 			patience=1, check_interval=1, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
