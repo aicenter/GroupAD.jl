@@ -89,7 +89,7 @@ function fit(data, parameters)
 	# fit train data
 	try
 		global info, fit_t, _, _, _ = @timed fit!(model, instance_data, loss; max_train_time=82800/max_seed, 
-			patience=100, check_interval=10, parameters...)
+			patience=200, check_interval=10, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
 		@info "Failed training due to \n$e"
@@ -104,7 +104,7 @@ function fit(data, parameters)
 		model = info.model
 		)
 
-	# now return the infor to be saved and an array of tuples (anomaly score function, hyperparatemers)
+	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
 	L=100
 	training_info, [
 		(x -> GroupAD.Models.likelihood(info.model,x), 
@@ -125,6 +125,13 @@ This function edits the sampled parameters based on nature of data - e.g. dimens
 behaviour is doing nothing - then used `GroupAD.edit_params`.
 """ 
 function edit_params(data, parameters)
+	idim = size(data[1][1].data.data,1)
+	# put the largest possible zdim where zdim < idim, the model tends to converge poorly if the latent dim is larger than idim
+	if parameters.zdim >= idim
+		zdims = 2 .^(1:8)
+		zdim_new = zdims[zdims .< idim][end]
+		parameters = merge(parameters, (zdim=zdim_new,))
+	end
 	parameters
 end
 

@@ -66,7 +66,7 @@ for individual bags using sum of instance likelihoods.
 Corrected with the cardinality distribution.
 """
 function rec_score_from_likelihood(lh, sizes, pc::T) where T <: Distribution
-    s = map(x -> sum(x), lh)
+    s = sum.(lh)
     c = -logpdf(pc, sizes)
     return s .+ c
 end
@@ -79,7 +79,7 @@ for individual bags using sum of instance likelihoods.
 Corrected with the logU constant.
 """
 function rec_score_from_likelihood(lh, sizes, logU::AbstractFloat)
-    s = map(x -> sum(x), lh)
+    s = sum.(lh)
     nU = logU * sizes
     return s .- nU
 end
@@ -92,7 +92,7 @@ for individual bags using sum of instance likelihoods.
 Corrected with both cardinality distribution and the logU constant.
 """
 function rec_score_from_likelihood(lh, sizes, pc::T, logU::AbstractFloat) where T <: Distribution
-    s = map(x -> sum(x), lh)
+    s = sum.(lh)
     c = -logpdf(pc, sizes)
     nU = logU * sizes
     return s .+ c .- nU

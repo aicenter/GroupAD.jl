@@ -132,7 +132,7 @@ function experiment_likelihoods(score_fun, parameters, data, savepath; verb=true
 		# now save the stuff
 		savef = joinpath(savepath, savename(merge(parameters, (type = score_names[i],)), "bson", digits=5))
 		result = (
-			parameters = parameters,
+			parameters = merge(parameters, (type = score_names[i],)),
 			tr_scores = tr_scores,
 			tr_labels = tr_data[2], 
 			tr_eval_t = tr_eval_t + eval_times[i] + likelihoods_time[1], # sum all times
@@ -316,7 +316,7 @@ function basic_experimental_loop(sample_params_f, fit_f, edit_params_f,
 				@time for result in results
 					if modelname in ["vae_instance", "statistician"]
 						experiment_bag(result..., data, _savepath; save_entries...)
-					else
+					else # vae_basic, knn_basic
 						experiment(result..., data, _savepath; save_entries...)
 					end
 				end

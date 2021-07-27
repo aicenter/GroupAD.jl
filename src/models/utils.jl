@@ -55,3 +55,24 @@ function unpack_mill(dt::T) where T <: Tuple{Array,Any}
 	bag_data = dt[1]
     return bag_data, bag_labels
 end
+
+"""
+    RandomBagBatches(data;batchsize::Int=32,randomize=true)
+
+Creates random batch for bag data which are an array of
+arrays. If data length is smaller than batchsize, returns
+the full data.
+"""
+function RandomBagBatches(data;batchsize::Int=32,randomize=true)
+    l = length(data)
+	if batchsize > l
+		return data
+	end
+    if randomize
+        idx = sample(1:l,batchsize)
+		return (data)[idx]
+    else
+		idx = sample(1:l-batchsize)
+        return data[idx:idx+batchsize-1]
+    end
+end

@@ -118,29 +118,6 @@ function elbo1(m::NeuralStatistician, x::AbstractArray;β1=1.0,β2=1.0)
     llh - β1 * kld1 - β2 * kld2
 end
 
-
-"""
-    RandomBagBatches(data;batchsize::Int=32,randomize=true)
-
-Creates random batch for bag data which are an array of
-arrays. If data length is smaller than batchsize, returns
-the full data.
-"""
-function RandomBagBatches(data;batchsize::Int=32,randomize=true)
-    l = length(data)
-	if batchsize > l
-		return data
-	end
-    if randomize
-        idx = sample(1:l,batchsize)
-		return (data)[idx]
-    else
-		idx = sample(1:l-batchsize)
-        return data[idx:idx+batchsize-1]
-    end
-end
-
-
 """
 	StatsBase.fit!(model::NeuralStatistician, data::Tuple, loss::Function; max_train_time=82800, lr=0.001, 
 		batchsize=64, patience=30, check_interval::Int=10, kwargs...)
@@ -184,17 +161,18 @@ function StatsBase.fit!(model::NeuralStatistician, data::Tuple, loss::Function;
 		# classic training
 		bag_batch = RandomBagBatches(tr_x,batchsize=batchsize,randomize=true)
 		Flux.train!(lossf, ps, bag_batch, opt)
-		train_loss = mean([lossf(x) for x in tr_x])
+		# only batch training loss
+		batch_loss = mean(lossf.(bag_batch))
 
-    	push!(history, :training_loss, i, train_loss)
+    	push!(history, :training_loss, i, batch_loss)
 		if mod(i, check_interval) == 0
 			
 			# validation/early stopping
-			val_loss = mean([lossf(x) for x in val_x])
+			val_loss = mean(lossf.(val_x))
 			
-			@info "$i - loss: $(train_loss) (batch) | $(val_loss) (validation)"
+			@info "$i - loss: $(batch_loss) (batch) | $(val_loss) (validation)"
 
-			if isnan(val_loss) || isnan(train_loss)
+			if isnan(val_loss) || isnan(batch_loss)
 				error("Encountered invalid values in loss function.")
 			end
 
