@@ -17,5 +17,6 @@ include("toy.jl")
 include("experiments.jl")
 include("experiments_point_cloud.jl")
 include("models/Models.jl")
+include("evaluation/Evaluation.jl")
 
 end #module
