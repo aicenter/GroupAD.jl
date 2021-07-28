@@ -28,6 +28,7 @@ function point_cloud_experimental_loop(sample_params_f, fit_f, edit_params_f,
 
 		# run over all classes with the same hyperparameters
 		# use more CPU cores for calculation
+		@info "Starting parallel process on $(Threads.nthreads()) cores (over $max_seed seeds)."
 		Threads.@threads for seed in 1:max_seed
 			# with these hyperparameters, train and evaluate the model on different train/val/tst splits
 			# load data for either "MNIST_in" or "MNIST_out" and set the setting
@@ -47,7 +48,7 @@ function point_cloud_experimental_loop(sample_params_f, fit_f, edit_params_f,
 				mkpath(_savepath)
 				
 				# edit parameters
-				edited_parameters = edit_params_f(data, parameters)
+				edited_parameters = edit_params_f(data, parameters, class, method)
 				
 				@info "Trying to fit $modelname on $(dataset) in $method setting.\nModel parameters: $(edited_parameters)..."
 				@info "Train/validation/test splits: $(size(data[1][1], 2)) | $(size(data[2][1], 2)) | $(size(data[3][1], 2))"

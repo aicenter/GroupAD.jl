@@ -199,7 +199,7 @@ function experiment_reconstructed_input(score_fun, parameters, data, savepath; v
 		# now save the stuff
 		savef = joinpath(savepath, savename(merge(parameters, (type = score_names[i],)), "bson", digits=5))
 		result = (
-			parameters = parameters,
+			parameters = merge(parameters, (type = score_names[i],)),
 			tr_scores = tr_scores,
 			tr_labels = tr_data[2], 
 			tr_eval_t = tr_eval_t + eval_times[i] + bw_time[i],

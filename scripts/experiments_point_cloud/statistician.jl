@@ -89,13 +89,13 @@ function fit(data, parameters)
 	model = GroupAD.Models.statistician_constructor(;idim=size(data[1][1],1), parameters...)
 
 	# fit train data
-	# max. train time: 48 hours, over 5 CPU cores -> 2.4 hours of training for each model
-	# the full traning time should be 72 hours to ensure all scores are calculated
+	# max. train time: 24 hours, over 10 CPU cores -> 2.4 hours of training for each model
+	# the full traning time should be 48 hours to ensure all scores are calculated
 	# training time is decreased automatically for less cores!
 	try
 		# number of available cores
 		cores = Threads.nthreads()
-		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=48*3600*cores/max_seed/anomaly_classes, 
+		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=24*3600*cores/max_seed/anomaly_classes, 
 			patience=1, check_interval=1, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
@@ -134,8 +134,8 @@ end
 This modifies parameters according to data. Default version only returns the input arg. 
 Overload for models where this is needed.
 """
-function edit_params(data, parameters)
-	parameters
+function edit_params(data, parameters, class, method)
+	merge(parameters, (method = method, class = class, ))
 end
 
 ####################################################################

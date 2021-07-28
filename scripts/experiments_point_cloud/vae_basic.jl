@@ -87,8 +87,12 @@ function fit(data, parameters)
 	data = GroupAD.Models.aggregate(data, agf)
 
 	# fit train data
+	# max. train time: 24 hours, over 10 CPU cores -> 2.4 hours of training for each model
+	# the full traning time should be 48 hours to ensure all scores are calculated
+	# training time is decreased automatically for less cores!
 	try
-		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=82800/max_seed/anomaly_classes, 
+		cores = Threads.nthreads()
+		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=24*3600*cores/max_seed/anomaly_classes, 
 			patience=200, check_interval=10, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
@@ -137,8 +141,8 @@ function edit_params(data, parameters)
 	parameters
 end
 """
-function edit_params(data, parameters)
-	parameters
+function edit_params(data, parameters, class, method)
+	merge(parameters, (method = method, class = class, ))
 end 
 
 ####################################################################

@@ -11,6 +11,7 @@ end
 
 """
 	collect_files(target)
+	
 Walks recursively the `target` directory, collecting all files only along the way.
 """
 collect_files(target) = collect_files!(target, String[])
@@ -47,15 +48,15 @@ function results_dataframe_row(target::String)
 			return
 		end
 		scores = Base.vec(scores)
-		roc = EvalMetrics.roccurve(labels, scores)
-		auc = EvalMetrics.auc_trapezoidal(roc...)
-		prc = EvalMetrics.prcurve(labels, scores)
-		auprc = EvalMetrics.auc_trapezoidal(prc...)
+		roc = roccurve(labels, scores)
+		auc = auc_trapezoidal(roc...)
+		prc = prcurve(labels, scores)
+		auprc = auc_trapezoidal(prc...)
 
-		t5 = EvalMetrics.threshold_at_fpr(labels, scores, 0.05)
+		t5 = threshold_at_fpr(labels, scores, 0.05)
 		cm5 = ConfusionMatrix(labels, scores, t5)
-		tpr5 = EvalMetrics.true_positive_rate(cm5)
-		f5 = EvalMetrics.f1_score(cm5)
+		tpr5 = true_positive_rate(cm5)
+		f5 = f1_score(cm5)
 
 		push!(results, [auc, auprc, tpr5, f5])
 	end
