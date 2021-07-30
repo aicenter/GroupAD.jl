@@ -96,7 +96,7 @@ function fit(data, parameters)
 		# number of available cores
 		cores = Threads.nthreads()
 		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=24*3600*cores/max_seed/anomaly_classes, 
-			patience=1, check_interval=1, parameters...)
+			patience=200, check_interval=5, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
 		@info "Failed training due to \n$e"
