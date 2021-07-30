@@ -45,9 +45,12 @@ modelname = "vae_basic"
 Should return a named tuple that contains a sample of model parameters.
 """
 function sample_params()
-	par_vec = (2 .^(1:8), 2 .^(4:9), 10f0 .^(-4:-3), 2 .^ (5:7), ["relu", "swish", "tanh"], 3:4, 1:Int(1e8),
+	# MNIST has idim = 2 -> fewer possibilities for sampling
+	# zdim: 1, 2, 4, 8, 12, 16
+	# hdim: 4, 8, 16, 32, 64
+	par_vec = ([1, 2, 4, 8, 12, 16], 2 .^(2:6),  ["scalar", "diagonal"], 10f0 .^(-4:-3), 2 .^ (5:7), ["relu", "swish", "tanh"], 3:4, 1:Int(1e8),
 		["mean", "maximum", "median"])
-	argnames = (:zdim, :hdim, :lr, :batchsize, :activation, :nlayers, :init_seed, :aggregation)
+	argnames = (:zdim, :hdim, :var, :lr, :batchsize, :activation, :nlayers, :init_seed, :aggregation)
 	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
 	# ensure that zdim < hdim
 	while parameters.zdim >= parameters.hdim
@@ -84,8 +87,12 @@ function fit(data, parameters)
 	data = GroupAD.Models.aggregate(data, agf)
 
 	# fit train data
+	# max. train time: 24 hours, over 10 CPU cores -> 2.4 hours of training for each model
+	# the full traning time should be 48 hours to ensure all scores are calculated
+	# training time is decreased automatically for less cores!
 	try
-		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=82800/max_seed, 
+		cores = Threads.nthreads()
+		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=24*3600*cores/max_seed/anomaly_classes, 
 			patience=200, check_interval=10, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
@@ -119,7 +126,10 @@ end
 
 This function edits the sampled parameters based on nature of data - e.g. dimensions etc. Default
 behaviour is doing nothing - then used `GroupAD.edit_params`.
-""" 
+
+Note: Since MNIST has idim = 3, the only possible zdim smaller than idim is 2.
+Therefore this function is suspended.
+
 function edit_params(data, parameters)
 	idim = size(data[1][1].data.data,1)
 	# put the largest possible zdim where zdim < idim, the model tends to converge poorly if the latent dim is larger than idim
@@ -130,6 +140,10 @@ function edit_params(data, parameters)
 	end
 	parameters
 end
+"""
+function edit_params(data, parameters, class, method)
+	merge(parameters, (method = method, class = class, ))
+end 
 
 ####################################################################
 ################ THIS PART IS COMMON FOR ALL MODELS ################

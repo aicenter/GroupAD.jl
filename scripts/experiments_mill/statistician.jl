@@ -38,13 +38,18 @@ Should return a named tuple that contains a sample of model parameters.
 For NeuralStatistician, latent dimensions cdim and zdim should be smaller
 or equal to hidden dimension:
 - `cdim` <= `hdim`
+- `vdim` <= `hdim`
 - `zdim` <= `hdim`
 """
 function sample_params()
-	par_vec = (2 .^(4:9), 2 .^(2:7), 2 .^(2:7), 2 .^(1:6), 10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"], 1:Int(1e8))
-	argnames = (:hdim, :vdim, :cdim, :zdim, :lr, :nlayers, :batchsize, :activation, :init_seed)
+	par_vec = (2 .^(4:9), 2 .^(3:8), 2 .^(3:8), 2 .^(3:8), ["scalar", "diagonal"], 10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"], 1:Int(1e8))
+	argnames = (:hdim, :vdim, :cdim, :zdim, :var, :lr, :nlayers, :batchsize, :activation, :init_seed)
 	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
-	# ensure that zdim, cdim <= hdim
+	
+	# ensure that vdim, zdim, cdim <= hdim
+	while parameters.vdim >= parameters.hdim
+		parameters = merge(parameters, (vdim = sample(par_vec[2]),))
+	end
 	while parameters.cdim >= parameters.hdim
 		parameters = merge(parameters, (cdim = sample(par_vec[3]),))
 	end
@@ -59,7 +64,7 @@ end
 
 Negative ELBO for training of a Neural Statistician model.
 """
-loss(model::GenerativeModels.NeuralStatistician,x) = -elbo(model, x)
+loss(model::GenerativeModels.NeuralStatistician,x) = -GroupAD.Models.elbo1(model, x)
 
 (m::KLDivergence)(p::ConditionalDists.BMN, q::ConditionalDists.BMN) = IPMeasures._kld_gaussian(p,q)
 
@@ -78,7 +83,7 @@ function fit(data, parameters)
 	# fit train data
 	try
 		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=82800/max_seed, 
-			patience=20, check_interval=5, parameters...)
+			patience=200, check_interval=5, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
 		@info "Failed training due to \n$e"
@@ -96,12 +101,14 @@ function fit(data, parameters)
 	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
 	L=100
 	return training_info, [
-		(x -> GroupAD.Models.reconstruction_score(info.model,x), 
+		(x -> GroupAD.Models.likelihood(info.model,x), 
 			merge(parameters, (score = "reconstruction",))),
-		(x -> GroupAD.Models.reconstruction_score_mean(info.model,x), 
+		(x -> GroupAD.Models.mean_likelihood(info.model,x), 
 			merge(parameters, (score = "reconstruction-mean",))),
-		(x -> GroupAD.Models.reconstruction_score(info.model,x,L), 
-			merge(parameters, (score = "reconstruction-sampled", L=L)))
+		(x -> GroupAD.Models.likelihood(info.model,x,L), 
+			merge(parameters, (score = "reconstruction-sampled", L=L))),
+		(x -> GroupAD.Models.reconstruct_input(info.model, x),
+			merge(parameters, (score = "reconstructed_input",)))
 	]
 end
 

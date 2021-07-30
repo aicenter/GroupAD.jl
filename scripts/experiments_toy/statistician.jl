@@ -7,6 +7,7 @@ using StatsBase
 using BSON
 using Flux
 using GenerativeModels
+using Distributions
 
 s = ArgParseSettings()
 @add_arg_table! s begin
@@ -15,62 +16,61 @@ s = ArgParseSettings()
         help = "seed"
         default = 1
     "dataset"
-        default = "Fox"
+        default = "toy"
         arg_type = String
         help = "dataset"
+	"type"
+        default = 1
+        arg_type = Int
+        help = "type of toy dataset"
    "contamination"
         default = 0.0
         arg_type = Float64
         help = "training data contamination rate"
 end
 parsed_args = parse_args(ARGS, s)
-@unpack dataset, max_seed, contamination = parsed_args
+@unpack dataset, max_seed, type, contamination = parsed_args
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
-modelname = "vae_instance"
+modelname = "statistician"
 # sample parameters, should return a Dict of model kwargs 
 """
 	sample_params()
 
 Should return a named tuple that contains a sample of model parameters.
+For NeuralStatistician, latent dimensions cdim and zdim should be smaller
+or equal to hidden dimension:
+- `cdim` <= `hdim`
+- `vdim` <= `hdim`
+- `zdim` <= `hdim`
 """
 function sample_params()
-	par_vec = (2 .^(3:8), 2 .^(4:9), ["scalar", "diagonal"], 10f0 .^(-4:-3), 2 .^ (5:7), ["relu", "swish", "tanh"], 3:4, 1:Int(1e8))
-	argnames = (:zdim, :hdim, :var, :lr, :batchsize, :activation, :nlayers, :init_seed)
+	par_vec = (2 .^(1:5), 2 .^(1:4), 2 .^(1:4), 2 .^(1:4), ["scalar", "diagonal"], 10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"], 1:Int(1e8))
+	argnames = (:hdim, :vdim, :cdim, :zdim, :var, :lr, :nlayers, :batchsize, :activation, :init_seed)
 	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
-	# ensure that zdim < hdim
+
+	# ensure that vdim, zdim, cdim <= hdim
+	while parameters.vdim >= parameters.hdim
+		parameters = merge(parameters, (vdim = sample(par_vec[2]),))
+	end
+	while parameters.cdim >= parameters.hdim
+		parameters = merge(parameters, (cdim = sample(par_vec[3]),))
+	end
 	while parameters.zdim >= parameters.hdim
-		parameters = merge(parameters, (zdim = sample(par_vec[1])[1],))
+		parameters = merge(parameters, (zdim = sample(par_vec[4]),))
 	end
 	return parameters
 end
 
 """
-	loss(model::GenerativeModels.VAE, x[, batchsize])
+	loss(model::GenerativeModels.NeuralStatistician, x)
 
-Negative ELBO for training of a VAE model.
+Negative ELBO for training of a Neural Statistician model.
 """
-loss(model::GenerativeModels.VAE, x) = -elbo(model, x)
-# version of loss for large datasets
-loss(model::GenerativeModels.VAE, x, batchsize::Int) = 
-	mean(map(y->loss(model,y), Flux.Data.DataLoader(x, batchsize=batchsize)))
+loss(model::GenerativeModels.NeuralStatistician,x) = -elbo1(model, x)
 
-"""
-    train_val_data(data::Tuple)
-
-Make the data trainable via the basic vae model and its fit function.
-"""
-function train_val_data(data::Tuple)
-    train, val, test = data
-
-    train_new = (train[1].data.data, train[2])
-    val_inst = GroupAD.reindex(val[1],val[2] .== 0).data.data
-    nv = size(val_inst,2)
-    nv_all = size(val[1].data.data,2)
-    val_new = (val[1].data.data, vcat(zeros(Float32,nv),ones(Float32,nv_all-nv)))
-    return (train_new, val_new)
-end
+(m::KLDivergence)(p::ConditionalDists.BMN, q::ConditionalDists.BMN) = IPMeasures._kld_gaussian(p,q)
 
 """
 	fit(data, parameters)
@@ -82,14 +82,12 @@ Final parameters is a named tuple of names and parameter values that are used fo
 """
 function fit(data, parameters)
 	# construct model - constructor should only accept kwargs
-	model = GroupAD.Models.vae_constructor(;idim=size(data[1][1],1), parameters...)
-	# get only the data needed and unpack them from bags to intances
-    instance_data = train_val_data(data)
+	model = GroupAD.Models.statistician_constructor(;idim=2, parameters...)
 
 	# fit train data
 	try
-		global info, fit_t, _, _, _ = @timed fit!(model, instance_data, loss; max_train_time=82800/max_seed, 
-			patience=200, check_interval=10, parameters...)
+		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=82800/max_seed, 
+			patience=10, check_interval=1, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
 		@info "Failed training due to \n$e"
@@ -106,32 +104,24 @@ function fit(data, parameters)
 
 	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
 	L=100
-	training_info, [
+	return training_info, [
 		(x -> GroupAD.Models.likelihood(info.model,x), 
 			merge(parameters, (score = "reconstruction",))),
 		(x -> GroupAD.Models.mean_likelihood(info.model,x), 
 			merge(parameters, (score = "reconstruction-mean",))),
 		(x -> GroupAD.Models.likelihood(info.model,x,L), 
 			merge(parameters, (score = "reconstruction-sampled", L=L))),
-		(x -> GroupAD.Models.reconstruct(info.model,x), 
+		(x -> GroupAD.Models.reconstruct_input(info.model, x),
 			merge(parameters, (score = "reconstructed_input",)))
 	]
 end
 
 """
 	edit_params(data, parameters)
-
-This function edits the sampled parameters based on nature of data - e.g. dimensions etc. Default
-behaviour is doing nothing - then used `GroupAD.edit_params`.
-""" 
+This modifies parameters according to data. Default version only returns the input arg. 
+Overload for models where this is needed.
+"""
 function edit_params(data, parameters)
-	idim = size(data[1][1].data.data,1)
-	# put the largest possible zdim where zdim < idim, the model tends to converge poorly if the latent dim is larger than idim
-	if parameters.zdim >= idim
-		zdims = 2 .^(1:8)
-		zdim_new = zdims[zdims .< idim][end]
-		parameters = merge(parameters, (zdim=zdim_new,))
-	end
 	parameters
 end
 
@@ -139,14 +129,14 @@ end
 ################ THIS PART IS COMMON FOR ALL MODELS ################
 # only execute this if run directly - so it can be included in other files
 if abspath(PROGRAM_FILE) == @__FILE__
-	GroupAD.basic_experimental_loop(
+	GroupAD.toy_experimental_loop(
 		sample_params, 
 		fit, 
 		edit_params, 
 		max_seed, 
+		type, 
 		modelname, 
-		dataset, 
-		contamination, 
-		datadir("experiments/contamination-$(contamination)"),
+		dataset,
+		datadir("experiments/contamination-$(contamination)")
 		)
 end

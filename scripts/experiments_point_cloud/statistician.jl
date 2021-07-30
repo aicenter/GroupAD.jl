@@ -43,16 +43,21 @@ modelname = "statistician"
 	sample_params()
 
 Should return a named tuple that contains a sample of model parameters.
-For NeuralStatistician, latent dimensions cdim and zdim should be smaller
+For NeuralStatistician, latent dimensions vdim, cdim and zdim should be smaller
 or equal to hidden dimension:
 - `cdim` <= `hdim`
+- `vdim` <= `hdim`
 - `zdim` <= `hdim`
 """
 function sample_params()
-	par_vec = (2 .^(4:9), 2 .^(2:7), 2 .^(2:7), 2 .^(1:6), 10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"], 1:Int(1e8))
-	argnames = (:hdim, :vdim, :cdim, :zdim, :lr, :nlayers, :batchsize, :activation, :init_seed)
+	par_vec = (2 .^(2:7), 2 .^(1:5), 2 .^(1:5), 2 .^(1:5), ["scalar", "diagonal"], 10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"], 1:Int(1e8))
+	argnames = (:hdim, :vdim, :cdim, :zdim, :var, :lr, :nlayers, :batchsize, :activation, :init_seed)
 	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
-	# ensure that zdim, cdim <= hdim
+
+	# ensure that vdim, zdim, cdim <= hdim
+	while parameters.vdim >= parameters.hdim
+		parameters = merge(parameters, (vdim = sample(par_vec[2]),))
+	end
 	while parameters.cdim >= parameters.hdim
 		parameters = merge(parameters, (cdim = sample(par_vec[3]),))
 	end
@@ -67,7 +72,7 @@ end
 
 Negative ELBO for training of a Neural Statistician model.
 """
-loss(model::GenerativeModels.NeuralStatistician,x) = -elbo(model, x)
+loss(model::GenerativeModels.NeuralStatistician,x) = -GroupAD.Models.elbo1(model, x)
 
 (m::KLDivergence)(p::ConditionalDists.BMN, q::ConditionalDists.BMN) = IPMeasures._kld_gaussian(p,q)
 
@@ -84,9 +89,14 @@ function fit(data, parameters)
 	model = GroupAD.Models.statistician_constructor(;idim=size(data[1][1],1), parameters...)
 
 	# fit train data
+	# max. train time: 24 hours, over 10 CPU cores -> 2.4 hours of training for each model
+	# the full traning time should be 48 hours to ensure all scores are calculated
+	# training time is decreased automatically for less cores!
 	try
-		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=82800/max_seed/anomaly_classes, 
-			patience=20, check_interval=5, parameters...)
+		# number of available cores
+		cores = Threads.nthreads()
+		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=24*3600*cores/max_seed/anomaly_classes, 
+			patience=200, check_interval=5, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
 		@info "Failed training due to \n$e"
@@ -102,24 +112,30 @@ function fit(data, parameters)
 		)
 
 	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
-	L=100
+	# for Point clouds, only 50 samples to ensure quicker calculation
+	L=50
+	# the returned scores are only to either calculate likelihood or reconstruction of input
+	# the score functions themselves are inside experimental loop
 	return training_info, [
-		(x -> GroupAD.Models.reconstruction_score(info.model,x), 
+		(x -> GroupAD.Models.likelihood(info.model,x), 
 			merge(parameters, (score = "reconstruction",))),
-		(x -> GroupAD.Models.reconstruction_score_mean(info.model,x), 
+		(x -> GroupAD.Models.mean_likelihood(info.model,x), 
 			merge(parameters, (score = "reconstruction-mean",))),
-		(x -> GroupAD.Models.reconstruction_score(info.model,x,L), 
-			merge(parameters, (score = "reconstruction-sampled", L=L)))
+		(x -> GroupAD.Models.likelihood(info.model,x,L), 
+			merge(parameters, (score = "reconstruction-sampled", L=L))),
+		(x -> GroupAD.Models.reconstruct_input(info.model, x),
+			merge(parameters, (score = "reconstructed_input",)))
 	]
 end
 
 """
 	edit_params(data, parameters)
+	
 This modifies parameters according to data. Default version only returns the input arg. 
 Overload for models where this is needed.
 """
-function edit_params(data, parameters)
-	parameters
+function edit_params(data, parameters, class, method)
+	merge(parameters, (method = method, class = class, ))
 end
 
 ####################################################################

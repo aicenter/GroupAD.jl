@@ -8,6 +8,8 @@ videos
 plots
 notebooks
 _research
+log_files
+pbs_run
 
 ################################################################################
 #                                    Julia                                     #

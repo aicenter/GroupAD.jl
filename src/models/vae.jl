@@ -165,6 +165,26 @@ function StatsBase.fit!(model::VAE, data::Tuple, loss::Function; max_iters=10000
 	(history=history, iterations=i, model=model, npars=sum(map(p->length(p), Flux.params(model))))
 end
 
+# likelihood functions
+"""
+	likelihood(model::VAE, bag)
+
+Calculates the instance likelihoods for the VAE model.
+"""
+function likelihood(model::VAE, bag)
+	p = condition(model.decoder, rand(model.encoder, bag))
+	-logpdf(p, bag)
+end
+function likelihood(model::VAE, bag, L::Int)
+    l = hcat([likelihood(model, bag) for _ in 1:L]...)
+    return mean(l, dims=2)
+end
+
+function mean_likelihood(model::VAE, bag)
+	p = condition(model.decoder, mean(model.encoder, bag))
+	-logpdf(p, bag)
+end
+
 # anomaly score functions
 """
 	reconstruct(model::VAE, x)
@@ -208,12 +228,6 @@ function reconstruction_score(model::VAE, x::Mill.BagNode, agf::Function, args..
 	return reconstruction_score(model, _x, args...)
 end
 
-function reconstruction_score_bag(model::VAE, x::Mill.BagNode, fun::Function, args...)
-	vec = [x.data.data[:,j] for (i,j) in enumerate(x.bags)]
-	[fun(reconstruction_score(model, bag, args...)) for bag in vec]
-end
-
-
 """
 	reconstruction_score_mean(model::VAE, x)
 	reconstruction_score_mean(model::VAE, x::Mill.BagNode, agf)
@@ -229,11 +243,6 @@ function reconstruction_score_mean(model::VAE, x::Mill.BagNode, agf::Function)
 	# aggregate x - bags to vectors
 	_x = aggregate(x, agf)
 	reconstruction_score_mean(model, _x)
-end
-
-function reconstruction_score_bag_mean(model::VAE, x::Mill.BagNode, fun::Function, args...)
-	vec = [x.data.data[:,j] for (i,j) in enumerate(x.bags)]
-	[fun(reconstruction_score_mean(model, bag, args...)) for bag in vec]
 end
 
 """

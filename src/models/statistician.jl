@@ -1,7 +1,7 @@
 using Flux
 using ConditionalDists
 using GenerativeModels
-import GenerativeModels: NeuralStatistician
+import GenerativeModels: NeuralStatistician, elbo
 using ValueHistories
 using MLDataPattern: RandomBatches
 using Distributions
@@ -26,7 +26,7 @@ Constructs basic NeuralStatistician model.
     - `init_seed=nothing`: seed to initialize weights
 """
 function statistician_constructor(;idim::Int,hdim::Int,vdim::Int,cdim::Int,zdim::Int,
-    nlayers::Int=3,activation="relu",init_seed=nothing, kwargs...)
+    var::String="scalar", nlayers::Int=3,activation="relu",init_seed=nothing, kwargs...)
 
     (nlayers < 3) ? error("Less than 3 layers are not supported") : nothing
 
@@ -62,11 +62,19 @@ function statistician_constructor(;idim::Int,hdim::Int,vdim::Int,cdim::Int,zdim:
 	enc_z_dist = ConditionalMvNormal(enc_z)
 
     # decoder
-	dec = Chain(
-		build_mlp(zdim, hdim, hdim, nlayers - 1, activation=activation)...,
-		SplitLayer(hdim, [idim,1], [identity,safe_softplus])
-		)
-	dec_dist = ConditionalMvNormal(dec)
+	if var == "scalar"
+		dec = Chain(
+			build_mlp(zdim,hdim,hdim,nlayers-1,activation=activation)...,
+			SplitLayer(hdim, [idim,1], [identity,softplus])
+			)
+		dec_dist = ConditionalMvNormal(dec)
+	else
+		dec = Chain(
+			build_mlp(zdim,hdim,hdim,nlayers-1,activation=activation)...,
+			SplitLayer(hdim, [idim,idim], [identity,softplus])
+			)
+		dec_dist = ConditionalMvNormal(dec)
+	end
 
     # reset seed
 	(init_seed !== nothing) ? Random.seed!() : nothing
@@ -76,42 +84,45 @@ function statistician_constructor(;idim::Int,hdim::Int,vdim::Int,cdim::Int,zdim:
 end
 
 """
-	unpack_mill(dt)
+    elbo1(m::NeuralStatistician,x::AbstractArray; β1=1.0, β2=1.0)
+Neural Statistician log-likelihood lower bound.
+For a Neural Statistician model, simply create a loss
+function as
+    
+    `loss(x) = -elbo(model,x)`
+where `model` is a NeuralStatistician type.
+The β terms scale the KLDs:
+* β1: KL[q(c|D) || p(c)]
+* β2: KL[q(z|c,x) || p(z|c)]
 
-Takes Tuple of BagNodes and bag labels and returns
-both in a format that is fit for Flux.train!
+This function uses a speed-up concatenation of `v` and `c` which
+allocates less memory and should be more efficient.
 """
-function unpack_mill(dt)
-    bag_labels = dt[2]
-	bag_data = [dt[1][i].data.data for i in 1:length(bag_labels)]
-    return bag_data, bag_labels
+function elbo1(m::NeuralStatistician, x::AbstractArray;β1=1.0,β2=1.0)
+    # instance network
+    v = m.instance_encoder(x)
+    p = mean(v, dims=2)
+
+    # sample latent for context
+    c = rand(m.encoder_c, p)
+	C = reshape(repeat(c, size(v,2)),size(c,1),size(v,2))
+
+    # sample latent for instances
+    h = vcat(v,C)
+    z = rand(m.encoder_z, h)
+	
+    # 3 terms - likelihood, kl1, kl2
+    llh = mean(logpdf(m.decoder, x, z))
+    kld1 = mean(kl_divergence(condition(m.encoder_c, v), m.prior_c))
+    kld2 = mean(kl_divergence(condition(m.encoder_z, h), condition(m.conditional_z, c)))
+    llh - β1 * kld1 - β2 * kld2
 end
-
-
-"""
-    RandomBagBatches(data;batchsize::Int=32,randomize=true)
-
-Creates random batch for bag data which are an array of
-arrays.
-"""
-function RandomBagBatches(data;batchsize::Int=32,randomize=true)
-    l = length(data)
-	if batchsize > l
-		return data
-	end
-    if randomize
-        idx = sample(1:l,batchsize)
-		return (data)[idx]
-    else
-		idx = sample(1:l-batchsize)
-        return data[idx:idx+batchsize-1]
-    end
-end
-
 
 """
 	StatsBase.fit!(model::NeuralStatistician, data::Tuple, loss::Function; max_train_time=82800, lr=0.001, 
 		batchsize=64, patience=30, check_interval::Int=10, kwargs...)
+
+Function to fit NeuralStatistician model.
 """
 function StatsBase.fit!(model::NeuralStatistician, data::Tuple, loss::Function;
 	max_iters=10000, max_train_time=82800, lr=0.001, batchsize=64, patience=30,
@@ -150,17 +161,18 @@ function StatsBase.fit!(model::NeuralStatistician, data::Tuple, loss::Function;
 		# classic training
 		bag_batch = RandomBagBatches(tr_x,batchsize=batchsize,randomize=true)
 		Flux.train!(lossf, ps, bag_batch, opt)
-		train_loss = mean([lossf(x) for x in tr_x])
+		# only batch training loss
+		batch_loss = mean(lossf.(bag_batch))
 
-    	push!(history, :training_loss, i, train_loss)
+    	push!(history, :training_loss, i, batch_loss)
 		if mod(i, check_interval) == 0
 			
 			# validation/early stopping
-			val_loss = mean([lossf(x) for x in val_x])
+			val_loss = mean(lossf.(val_x))
 			
-			@info "$i - loss: $(train_loss) (batch) | $(val_loss) (validation)"
+			@info "$i - loss: $(batch_loss) (batch) | $(val_loss) (validation)"
 
-			if isnan(val_loss) || isnan(train_loss)
+			if isnan(val_loss) || isnan(batch_loss)
 				error("Encountered invalid values in loss function.")
 			end
 
@@ -195,19 +207,61 @@ end
 
 # anomaly score functions
 """
-	reconstruct(model::NeuralStatistician, bag)
+	reconstruct_input(model::NeuralStatistician, bag)
 
 Data reconstruction for NeuralStatistician.
 Data must be bags!
 """
-function reconstruct(model::NeuralStatistician, bag)
+function reconstruct_input(model::NeuralStatistician, bag)
 	v = model.instance_encoder(bag)
 	p = mean(v, dims=2)
-	c = rand(model.encoder_c, p)
-	h = hcat([vcat(v[1:end,i], c) for i in 1:size(v, 2)]...)
+    c = rand(model.encoder_c, p)
+    C = reshape(repeat(c, size(v,2)),size(c,1),size(v,2))
+    h = vcat(v,C)
 	z = rand(model.encoder_z, h)
 	mean(model.decoder, z)
 end
+
+"""
+	likelihood(model::NeuralStatistician, bag, [L])
+
+Calculates likelihood of a single bag. If L is provided,
+returns the sampled likelihood (mean).
+"""
+function likelihood(model::NeuralStatistician, bag)
+    v = model.instance_encoder(bag)
+	p = mean(v,dims=2)
+    c = rand(model.encoder_c, p)
+    C = reshape(repeat(c, size(v,2)),size(c,1),size(v,2))
+    h = vcat(v,C)
+	z = rand(model.encoder_z, h)
+    -logpdf(model.decoder, bag, z)
+end
+function likelihood(model::NeuralStatistician, bag, L::Int)
+    l = hcat([likelihood(model, bag) for _ in 1:L]...)
+    return mean(l, dims=2)
+end
+
+"""
+	mean_likelihood(model::NeuralStatistician, bag)
+
+Calculates the mean likelihood of a bag.
+"""
+function mean_likelihood(model::NeuralStatistician, bag)
+    v = model.instance_encoder(bag)
+    p = mean(v,dims=2)
+	c = rand(model.encoder_c, p) # should there be mean?
+    C = reshape(repeat(c, size(v,2)),size(c,1),size(v,2))
+    h = vcat(v,C)
+    z = mean(model.encoder_z, h)
+    -logpdf(model.decoder, bag, z)
+end
+
+
+
+##################
+### Deprecated ###
+##################
 
 """
 	encode_context(model::NeuralStatistician, bag)
@@ -218,20 +272,6 @@ function encode_mean(model::NeuralStatistician, bag)
 	v = model.instance_encoder(bag)
 	p = mean(v, dims=2)
 	c = mean(model.encoder_c, p)
-end
-
-"""
-	likelihood(model::NeuralStatistician, bag)
-
-Calculates likelihood of a single bag.
-"""
-function likelihood(model::NeuralStatistician, bag)
-    v = model.instance_encoder(bag)
-	p = mean(v,dims=2)
-	c = rand(model.encoder_c, p)
-	h = hcat([vcat(v[1:end,i], c) for i in 1:size(v, 2)]...)
-	z = rand(model.encoder_z, h)
-    llh = -logpdf(model.decoder, bag, z)
 end
 
 """
