@@ -1,4 +1,5 @@
 #!/bin/bash
+#SBATCH --partition=cpulong
 #SBATCH --time=48:00:00
 #SBATCH --nodes=1 --ntasks-per-node=1 --cpus-per-task=10
 #SBATCH --mem=100G

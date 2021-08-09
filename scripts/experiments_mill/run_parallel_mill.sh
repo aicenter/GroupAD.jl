@@ -1,7 +1,7 @@
 #!/bin/bash
 # This runs parallel experiments over all datasets.
 # USAGE EXAMPLE
-# 	./run_parallel.sh pidforest 3 1 2 datasets_tabular.txt 0.05
+# 	./run_parallel_mill.sh vae_basic 3 1 2 datasets_mill.txt 0.05
 # Run from this folder only.
 MODEL=$1 		# which model to run
 NUM_SAMPLES=$2	# how many repetitions
@@ -9,7 +9,7 @@ MAX_SEED=$3		# how many folds over dataset
 NUM_CONC=$4		# number of concurrent tasks in the array job
 DATASET_FILE=$5	# file with dataset list
 
-LOG_DIR="${HOME}/logs/groupad/${MODEL}"
+LOG_DIR="${HOME}/logs/${MODEL}"
 
 if [ ! -d "$LOG_DIR" ]; then
 	mkdir $LOG_DIR
