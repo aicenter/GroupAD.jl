@@ -40,7 +40,7 @@ both in a format that is fit for Flux.train!
 """
 function unpack_mill(dt::T) where T <: Tuple{BagNode,Any}
     bag_labels = dt[2]
-	bag_data = [dt[1][i].data.data for i in 1:length(bag_labels)]
+	bag_data = [dt[1][i].data.data for i in 1:Mill.length(dt[1])]
     return bag_data, bag_labels
 end
 """

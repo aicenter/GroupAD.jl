@@ -89,6 +89,7 @@ function experiment_likelihoods(score_fun, parameters, data, savepath; verb=true
 	length_all = length(train) + length(val) + length(test)
 	if safe_time * length_all / 100 > 3600
 		return nothing
+	end
 
 	# calculate likelihoods
 	tr_lh, tr_lh_t, _, _, _ = @timed score_fun.(train)
