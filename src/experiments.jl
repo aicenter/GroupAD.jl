@@ -80,6 +80,17 @@ function experiment_likelihoods(score_fun, parameters, data, savepath; verb=true
 	poisson, poisson_eval_t = @timed fit_mle(Poisson, bag_sizes)
 	lognormal, lognormal_eval_t = @timed fit_mle(LogNormal, bag_sizes)
 
+	# time safety
+	# if sampled likelihood takes too much time, do not calculate it
+	# if the calculation would take approximately more than an hour
+	# (there are 2,4 hours of time for calculation of scores for each model)
+	length(train) > 100 ? idx = 100 : idx = length(train)
+	_, safe_time = @timed score_fun.(train[1:idx])
+	length_all = length(train) + length(val) + length(test)
+	if safe_time * length_all / 100 > 3600
+		return nothing
+	end
+
 	# calculate likelihoods
 	tr_lh, tr_lh_t, _, _, _ = @timed score_fun.(train)
 	val_lh, val_lh_t, _, _, _ = @timed score_fun.(val)
