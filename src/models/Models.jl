@@ -16,5 +16,6 @@ include("aggregation.jl")
 include("knn.jl")
 include("vae.jl")
 include("statistician.jl")
+include("MGMM.jl")
 
 end # module
