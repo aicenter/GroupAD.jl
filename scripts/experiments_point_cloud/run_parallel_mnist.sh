@@ -20,7 +20,7 @@ fi
 # submit to slurm
 sbatch \
 --array=1-${NUM_SAMPLES}%${NUM_CONC} \
---output="${LOG_DIR}/${d}-%A_%a.out" \
+--output="${LOG_DIR}/MNIST_$METHOD-%A_%a.out" \
     ./${MODEL}.sh $MAX_SEED "MNIST" 10 $METHOD $CONTAMINATION
 
 # for local testing    

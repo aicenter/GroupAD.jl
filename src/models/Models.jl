@@ -17,5 +17,6 @@ include("knn.jl")
 include("vae.jl")
 include("statistician.jl")
 include("MGMM.jl")
+include("PoolModel.jl")
 
 end # module
