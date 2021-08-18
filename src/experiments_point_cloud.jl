@@ -81,7 +81,7 @@ function point_cloud_experimental_loop(sample_params_f, fit_f, edit_params_f,
 
 					# now loop over all anomaly score funs
 					@time for result in results
-						if modelname in ["vae_instance", "statistician"]
+						if modelname in ["vae_instance", "statistician", "PoolModel"]
 							experiment_bag(result..., data, _savepath; save_entries...)
 						else
 							experiment(result..., data, _savepath; save_entries...)

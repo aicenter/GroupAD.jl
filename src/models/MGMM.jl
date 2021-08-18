@@ -61,7 +61,7 @@ end
 Constructs the MGMM model. For given data (for input dimension), K, and T,
 returns a randomly initialized model.
 """
-function MGMM_constructor(data;K::Int, T::Int, init_seed=nothing)
+function MGMM_constructor(data;K::Int, T::Int, init_seed=nothing, kwargs...)
     idim = size(data[1],1)
     M = length(data)
     Nm = size.(data, 2)
