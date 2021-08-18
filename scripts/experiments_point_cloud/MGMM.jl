@@ -3,10 +3,11 @@ using DrWatson
 using ArgParse
 using GroupAD
 import StatsBase: fit!, predict
+using GroupAD.Models: MGMM, unpack_mill, MGMM_constructor
+import StatsBase: fit!, predict
 using StatsBase
 using BSON
 using Flux
-using GenerativeModels
 using Distributions
 
 s = ArgParseSettings()
@@ -37,44 +38,31 @@ parsed_args = parse_args(ARGS, s)
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
-modelname = "statistician"
-# sample parameters, should return a Dict of model kwargs 
+modelname = "MGMM"
+
 """
 	sample_params()
 
-Should return a named tuple that contains a sample of model parameters.
-For NeuralStatistician, latent dimensions vdim, cdim and zdim should be smaller
-or equal to hidden dimension:
-- `cdim` <= `hdim`
-- `vdim` <= `hdim`
-- `zdim` <= `hdim`
+Returns sampled parameters. MGMM has only 2 parameters:
+- T: number of topics
+- K: number of Gaussian clusters.
 """
 function sample_params()
-	par_vec = (2 .^(2:7), [1, 2, 3], 2 .^(1:5), 2 .^(1:5), ["scalar", "diagonal"], 10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"], 1:Int(1e8))
-	argnames = (:hdim, :vdim, :cdim, :zdim, :var, :lr, :nlayers, :batchsize, :activation, :init_seed)
-	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
-
-	# ensure that vdim, zdim, cdim <= hdim
-	while parameters.vdim >= parameters.hdim
-		parameters = merge(parameters, (vdim = sample(par_vec[2]),))
-	end
-	while parameters.cdim >= parameters.hdim
-		parameters = merge(parameters, (cdim = sample(par_vec[3]),))
-	end
-	while parameters.zdim >= parameters.hdim
-		parameters = merge(parameters, (zdim = sample(par_vec[4]),))
-	end
-	return parameters
+    par_vec = (2:10, 2:10, 1:Int(1e8))
+    argnames = (:K, :T, :init_seed)
+    parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
+    return parameters
 end
 
 """
-	loss(model::GenerativeModels.NeuralStatistician, x)
+	loss(m::MGMM, x)
 
-Negative ELBO for training of a Neural Statistician model.
+Returns the negative log-likelihood of a bag as a sum of instance log-likelihoods.
 """
-loss(model::GenerativeModels.NeuralStatistician,x) = -GroupAD.Models.elbo1(model, x)
-
-(m::KLDivergence)(p::ConditionalDists.BMN, q::ConditionalDists.BMN) = IPMeasures._kld_gaussian(p,q)
+function loss(m::MGMM, x)
+    MM = GroupAD.Models.toMixtureModel(m)
+    -sum(logpdf(MM, x))
+end
 
 """
 	fit(data, parameters)
@@ -85,25 +73,24 @@ Each element of the return vector contains a specific anomaly score function - t
 Final parameters is a named tuple of names and parameter values that are used for creation of the savefile name.
 """
 function fit(data, parameters)
-	# construct model - constructor should only accept kwargs
-	model = GroupAD.Models.statistician_constructor(;idim=size(data[1][1],1), parameters...)
+	tr_x, _ = unpack_mill(data[1])
+    model = MGMM_constructor(tr_x; parameters...)
 
-	# fit train data
+    # fit train data
 	# max. train time: 24 hours, over 10 CPU cores -> 2.4 hours of training for each model
 	# the full traning time should be 48 hours to ensure all scores are calculated
 	# training time is decreased automatically for less cores!
 	try
-		# number of available cores
 		cores = Threads.nthreads()
 		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=24*3600*cores/max_seed/anomaly_classes, 
-			patience=200, check_interval=5, parameters...)
+			patience=100, check_interval=1, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
 		@info "Failed training due to \n$e"
 		return (fit_t = NaN, history=nothing, npars=nothing, model=nothing), [] 
 	end
 
-	# construct return information - put e.g. the model structure here for generative models
+    # construct return information - put e.g. the model structure here for generative models
 	training_info = (
 		fit_t = fit_t,
 		history = info.history,
@@ -111,29 +98,23 @@ function fit(data, parameters)
 		model = info.model
 		)
 
-	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
-	# for Point clouds, only 50 samples to ensure quicker calculation
-	L=50
-	# the returned scores are only to either calculate likelihood or reconstruction of input
-	# the score functions themselves are inside experimental loop
+    # now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
 	return training_info, [
-		(x -> GroupAD.Models.likelihood(info.model,x), 
-			merge(parameters, (score = "reconstruction",))),
-		(x -> GroupAD.Models.mean_likelihood(info.model,x), 
-			merge(parameters, (score = "reconstruction-mean",))),
-		(x -> GroupAD.Models.likelihood(info.model,x,L), 
-			merge(parameters, (score = "reconstruction-sampled", L=L))),
-		(x -> GroupAD.Models.reconstruct_input(info.model, x),
-			merge(parameters, (score = "reconstructed_input",)))
+		(x -> GroupAD.Models.topic_score(info.model,x), 
+			merge(parameters, (score = "topic",))),
+        (x -> GroupAD.Models.point_score(info.model,x), 
+			merge(parameters, (score = "point",))),
+        (x -> GroupAD.Models.MGMM_score(info.model,x), 
+			merge(parameters, (score = "topic+point",)))
 	]
 end
 
 """
 	edit_params(data, parameters)
-	
-This modifies parameters according to data. Default version only returns the input arg. 
-Overload for models where this is needed.
-"""
+
+This function edits the sampled parameters based on nature of data - e.g. dimensions etc. Default
+behaviour is doing nothing - then used `GroupAD.edit_params`.
+""" 
 function edit_params(data, parameters, class, method)
 	merge(parameters, (method = method, class = class, ))
 end

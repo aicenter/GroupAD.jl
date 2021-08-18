@@ -37,44 +37,50 @@ parsed_args = parse_args(ARGS, s)
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
-modelname = "statistician"
-# sample parameters, should return a Dict of model kwargs 
+modelname = "PoolModel"
+
 """
 	sample_params()
 
 Should return a named tuple that contains a sample of model parameters.
-For NeuralStatistician, latent dimensions vdim, cdim and zdim should be smaller
-or equal to hidden dimension:
-- `cdim` <= `hdim`
-- `vdim` <= `hdim`
-- `zdim` <= `hdim`
+Mean and maximum separately can be added but probably as different functions
+since classical `mean` would return a single value.
+
+E.g.
+````
+bag_mean(x) = mean(x, dims=2)
+bag_maximum(x) = maximum(x, dims=2)
+```
 """
 function sample_params()
-	par_vec = (2 .^(2:7), [1, 2, 3], 2 .^(1:5), 2 .^(1:5), ["scalar", "diagonal"], 10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"], 1:Int(1e8))
-	argnames = (:hdim, :vdim, :cdim, :zdim, :var, :lr, :nlayers, :batchsize, :activation, :init_seed)
+	par_vec = (
+        2 .^(3:8), 2 .^(2:6), 2 .^(2:6), 2 .^(2:6), ["scalar", "diagonal"],
+        10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"],
+        ["bag_mean", "bag_maximum", "mean_max", "mean_max_card", "sum_stat", "sum_stat_card"],
+        1:Int(1e8)
+    )
+	argnames = (:hdim, :predim, :postdim, :edim, :var, :lr, :nlayers, :batchsize, :activation, :poolf, :init_seed)
 	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
-
-	# ensure that vdim, zdim, cdim <= hdim
-	while parameters.vdim >= parameters.hdim
-		parameters = merge(parameters, (vdim = sample(par_vec[2]),))
+	
+	# ensure that predim, postdim, edim <= hdim
+	while parameters.predim >= parameters.hdim
+		parameters = merge(parameters, (predim = sample(par_vec[2]),))
 	end
-	while parameters.cdim >= parameters.hdim
-		parameters = merge(parameters, (cdim = sample(par_vec[3]),))
+	while parameters.postdim >= parameters.hdim
+		parameters = merge(parameters, (postdim = sample(par_vec[3]),))
 	end
-	while parameters.zdim >= parameters.hdim
-		parameters = merge(parameters, (zdim = sample(par_vec[4]),))
+	while parameters.edim >= parameters.hdim
+		parameters = merge(parameters, (edim = sample(par_vec[4]),))
 	end
 	return parameters
 end
 
 """
-	loss(model::GenerativeModels.NeuralStatistician, x)
+    loss(model::GroupAD.Models.PoolModel,x)
 
-Negative ELBO for training of a Neural Statistician model.
+Loss for PoolModel.
 """
-loss(model::GenerativeModels.NeuralStatistician,x) = -GroupAD.Models.elbo1(model, x)
-
-(m::KLDivergence)(p::ConditionalDists.BMN, q::ConditionalDists.BMN) = IPMeasures._kld_gaussian(p,q)
+loss(model::GroupAD.Models.PoolModel,x) = GroupAD.Models.pm_loss(model, x)
 
 """
 	fit(data, parameters)
@@ -86,7 +92,7 @@ Final parameters is a named tuple of names and parameter values that are used fo
 """
 function fit(data, parameters)
 	# construct model - constructor should only accept kwargs
-	model = GroupAD.Models.statistician_constructor(;idim=size(data[1][1],1), parameters...)
+	model = GroupAD.Models.pm_constructor(;idim=size(data[1][1],1), parameters...)
 
 	# fit train data
 	# max. train time: 24 hours, over 10 CPU cores -> 2.4 hours of training for each model
@@ -112,18 +118,8 @@ function fit(data, parameters)
 		)
 
 	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
-	# for Point clouds, only 50 samples to ensure quicker calculation
-	L=50
-	# the returned scores are only to either calculate likelihood or reconstruction of input
-	# the score functions themselves are inside experimental loop
 	return training_info, [
-		(x -> GroupAD.Models.likelihood(info.model,x), 
-			merge(parameters, (score = "reconstruction",))),
-		(x -> GroupAD.Models.mean_likelihood(info.model,x), 
-			merge(parameters, (score = "reconstruction-mean",))),
-		(x -> GroupAD.Models.likelihood(info.model,x,L), 
-			merge(parameters, (score = "reconstruction-sampled", L=L))),
-		(x -> GroupAD.Models.reconstruct_input(info.model, x),
+		(x -> GroupAD.Models.reconstruct(info.model, x),
 			merge(parameters, (score = "reconstructed_input",)))
 	]
 end
