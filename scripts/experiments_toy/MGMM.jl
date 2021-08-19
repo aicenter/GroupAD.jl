@@ -107,9 +107,9 @@ end
 This modifies parameters according to data. Default version only returns the input arg. 
 Overload for models where this is needed.
 """
-function edit_params(data, parameters, class, method)
+function edit_params(data, parameters, type)
 	merge(parameters, (scenario = type, ))
-end 
+end
 
 ####################################################################
 ################ THIS PART IS COMMON FOR ALL MODELS ################
