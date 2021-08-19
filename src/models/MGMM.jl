@@ -323,7 +323,7 @@ end
 
 Returns the topic score for data.
 """
-function topic_score(m::MGMM, x::AbstractArray; n = 1000)
+function topic_score(m::MGMM, x::Array{S,2}; n = 1000) where S
     beta, chi, Alpha = m.β, m.χ, m.α
     T = size(chi, 2)
     φa = phi_score(x, m)
@@ -338,13 +338,17 @@ function topic_score(m::MGMM, data::Mill.BagNode)
     dt, _ = unpack_mill((data,[]))
     map(x -> topic_score(m, x), dt)
 end
+function topic_score(m::MGMM, data::Array{Array{S,2},1}) where S
+    dt, _ = unpack_mill((data,[]))
+    map(x -> topic_score(m, x), dt)
+end
 
 """
     point_score(m::MGMM, data::Mill.Bagnode)
 
 Returns the point score for data.
 """
-function point_score(m::MGMM, x::AbstractArray)
+function point_score(m::MGMM, x::Array{S,2}) where S
     MM = toMixtureModel(m)
     -sum(logpdf(MM, x))
 end
@@ -352,6 +356,11 @@ function point_score(m::MGMM, data::Mill.BagNode)
     dt, _ = unpack_mill((data,[]))
     map(x -> point_score(m, x), dt)
 end
+function point_score(m::MGMM, data::Array{Array{S,2},1}) where S
+    dt, _ = unpack_mill((data,[]))
+    map(x -> point_score(m, x), dt)
+end
+
 
 """
     MGMM_score(m::MGMM, data)

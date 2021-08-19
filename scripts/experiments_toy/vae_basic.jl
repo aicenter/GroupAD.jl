@@ -33,44 +33,54 @@ parsed_args = parse_args(ARGS, s)
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
-modelname = "statistician"
+modelname = "vae_basic"
 # sample parameters, should return a Dict of model kwargs 
 """
 	sample_params()
 
 Should return a named tuple that contains a sample of model parameters.
-For NeuralStatistician, latent dimensions cdim and zdim should be smaller
-or equal to hidden dimension:
-- `cdim` <= `hdim`
-- `vdim` <= `hdim`
-- `zdim` <= `hdim`
 """
 function sample_params()
-	par_vec = (2 .^(2:4), 2 .^(1:3), 2 .^(1:3), 2 .^(1:3), ["scalar", "diagonal"], 10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"], 1:Int(1e8))
-	argnames = (:hdim, :vdim, :cdim, :zdim, :var, :lr, :nlayers, :batchsize, :activation, :init_seed)
+	par_vec = (2 .^(2:4), 2 .^(1:3), ["scalar", "diagonal"], 10f0 .^(-4:-3), 2 .^ (5:7), ["relu", "swish", "tanh"], 3:4, 1:Int(1e8),
+		["mean", "maximum", "median"])
+	argnames = (:zdim, :hdim, :var, :lr, :batchsize, :activation, :nlayers, :init_seed, :aggregation)
 	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
-
-	# ensure that vdim, zdim, cdim <= hdim
-	while parameters.vdim >= parameters.hdim
-		parameters = merge(parameters, (vdim = sample(par_vec[2]),))
-	end
-	while parameters.cdim >= parameters.hdim
-		parameters = merge(parameters, (cdim = sample(par_vec[3]),))
-	end
+	# ensure that zdim < hdim
 	while parameters.zdim >= parameters.hdim
-		parameters = merge(parameters, (zdim = sample(par_vec[4]),))
+		parameters = merge(parameters, (zdim = sample(par_vec[1])[1],))
 	end
 	return parameters
 end
 
 """
-	loss(model::GenerativeModels.NeuralStatistician, x)
+	loss(model::GenerativeModels.VAE, x[, batchsize])
 
-Negative ELBO for training of a Neural Statistician model.
+Negative ELBO for training of a VAE model.
 """
-loss(model::GenerativeModels.NeuralStatistician,x) = -elbo1(model, x)
+loss(model::GenerativeModels.VAE, x) = -elbo(model, x)
+# version of loss for large datasets
+loss(model::GenerativeModels.VAE, x, batchsize::Int) = 
+	mean(map(y->loss(model,y), Flux.Data.DataLoader(x, batchsize=batchsize)))
 
-(m::KLDivergence)(p::ConditionalDists.BMN, q::ConditionalDists.BMN) = IPMeasures._kld_gaussian(p,q)
+
+function aggregate_toy(data, agf::Function)
+    m = mean.(data, dims=2)
+    hcat(m...)
+end
+
+aggregate_toy(data::Tuple, agf::Function) = Tuple(map(d->(aggregate_toy(d[1], agf), d[2]), data))
+
+function reconstruction_score(model::VAE, x::AbstractArray, agf::Function, args...)
+	# aggregate x - bags to vectors
+	_x = aggregate_toy(x, agf)
+	return GroupAD.Models.reconstruction_score(model, _x, args...)
+end
+
+function reconstruction_score_mean(model::VAE, x::AbstractArray, agf::Function)
+	# aggregate x - bags to vectors
+	_x = aggregate_toy(x, agf)
+	GroupAD.Models.reconstruction_score_mean(model, _x)
+end
 
 """
 	fit(data, parameters)
@@ -82,12 +92,17 @@ Final parameters is a named tuple of names and parameter values that are used fo
 """
 function fit(data, parameters)
 	# construct model - constructor should only accept kwargs
-	model = GroupAD.Models.statistician_constructor(;idim=2, parameters...)
+	model = GroupAD.Models.vae_constructor(;idim=2, parameters...)
+
+	# aggregate bags into vectors
+	# first convert the aggregation string to a function
+	agf = getfield(StatsBase, Symbol(parameters.aggregation))
+	data = aggregate_toy(data, agf)
 
 	# fit train data
 	try
 		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=10*3600/max_seed, 
-			patience=200, check_interval=5, parameters...)
+			patience=200, check_interval=10, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
 		@info "Failed training due to \n$e"
@@ -102,17 +117,15 @@ function fit(data, parameters)
 		model = info.model
 		)
 
-	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
+	# now return the infor to be saved and an array of tuples (anomaly score function, hyperparatemers)
 	L=100
-	return training_info, [
-		(x -> GroupAD.Models.likelihood(info.model,x), 
+	training_info, [
+		(x -> reconstruction_score(info.model,x,agf), 
 			merge(parameters, (score = "reconstruction",))),
-		(x -> GroupAD.Models.mean_likelihood(info.model,x), 
+		(x -> reconstruction_score_mean(info.model,x,agf), 
 			merge(parameters, (score = "reconstruction-mean",))),
-		(x -> GroupAD.Models.likelihood(info.model,x,L), 
-			merge(parameters, (score = "reconstruction-sampled", L=L))),
-		(x -> GroupAD.Models.reconstruct_input(info.model, x),
-			merge(parameters, (score = "reconstructed_input",)))
+		(x -> reconstruction_score(info.model,x,agf,L), 
+			merge(parameters, (score = "reconstruction-sampled", L=L)))		
 	]
 end
 
@@ -124,6 +137,8 @@ Overload for models where this is needed.
 function edit_params(data, parameters)
 	parameters
 end
+
+@info "Starting experimental loop."
 
 ####################################################################
 ################ THIS PART IS COMMON FOR ALL MODELS ################
