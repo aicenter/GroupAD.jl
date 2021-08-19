@@ -110,12 +110,13 @@ function toy_experimental_loop(sample_params_f, fit_f, edit_params_f,
 	# set a maximum for parameter sampling retries
 	# this is here because you might sample the same parameters of an already trained model
 	# in that case this loop runs again, for a total of 10 tries
+	@info "Inside loop."
 	try_counter = 0
 	max_tries = 10*max_seed
 	while try_counter < max_tries
 		# sample the random hyperparameters
 	    parameters = sample_params_f()
-
+		@info "Parameters sampled."
 	    # with these hyperparameters, train and evaluate the model on different train/val/tst splits
 	    for seed in 1:max_seed
 	    	# define where data is going to be saved
@@ -159,7 +160,7 @@ function toy_experimental_loop(sample_params_f, fit_f, edit_params_f,
 
 				# now loop over all anomaly score funs
 				@time for result in results
-					if modelname in ["vae_instance", "statistician"]
+					if modelname in ["vae_instance", "statistician", "PoolModel"]
 						experiment_bag(result..., data, _savepath; save_entries...)
 					else
 						experiment(result..., data, _savepath; save_entries...)
