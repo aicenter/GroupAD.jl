@@ -103,7 +103,9 @@ end
 This function edits the sampled parameters based on nature of data - e.g. dimensions etc. Default
 behaviour is doing nothing.
 """ 
-edit_params = GroupAD.edit_params
+function edit_params(data, parameters, class, method)
+	merge(parameters, (scenario = type, ))
+end 
 
 ####################################################################
 ################ THIS PART IS COMMON FOR ALL MODELS ################
