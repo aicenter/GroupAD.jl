@@ -103,9 +103,9 @@ end
 This function edits the sampled parameters based on nature of data - e.g. dimensions etc. Default
 behaviour is doing nothing.
 """ 
-function edit_params(data, parameters, class, method)
+function edit_params(data, parameters, type)
 	merge(parameters, (scenario = type, ))
-end 
+end
 
 ####################################################################
 ################ THIS PART IS COMMON FOR ALL MODELS ################

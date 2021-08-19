@@ -128,7 +128,7 @@ function toy_experimental_loop(sample_params_f, fit_f, edit_params_f,
 			@info "Data created..."
 
 			# edit parameters
-			edited_parameters = edit_params_f(data, parameters)
+			edited_parameters = edit_params_f(data, parameters, type)
 
 			@info "Trying to fit $modelname on $dataset with parameters $(edited_parameters)..."
 			@info "Train/validation/test splits: $(length(data[1][1])) | $(length(data[2][1])) | $(length(data[3][1]))"
