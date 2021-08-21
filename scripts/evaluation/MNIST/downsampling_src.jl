@@ -22,7 +22,6 @@ using Random
 using StatsBase
 using Statistics
 
-
 """
     downsample(x::AbstractArray, ratio=0.5; seed = nothing)
     downsample(data::Mill.BagNode, labels; seed = nothing)
@@ -84,9 +83,6 @@ function downsample(data::Tuple; seed = nothing)
 
     return (tr, v, t)
 end
-
-modelpath = "data/experiments/contamination-0.0/vae_basic/MNIST/leave-one-in/class_index=1/seed=1/model_activation=relu_aggregation=maximum_batchsize=32_class=1_hdim=4_init_seed=64636347_lr=0.0001_method=leave-one-in_nlayers=3_var=diagonal_zdim=1.bson"
-
 
 """
     evaluate_at_downsampled(modelpath::String; all_results = all_results)
@@ -153,6 +149,56 @@ function evaluate_at_downsampled(modelpath::String)
         end
     end
 end
+function evaluate_at_downsampled(modelpaths::Array{String,1})
+    # seed extraction from modelpath
+    modelpath = modelpaths[1]
+    m = match(r"/contamination-0.0\/(.*)\/MNIST\/(.*)\/class_index=([0-9]{1,2})\/seed=([0-9]*)\/.*", modelpath)
+    modelname, method, class_ind, seed = String.(m.captures)
+    class_ind, seed = parse.(Int, (class_ind, seed))
+
+    # load data, prepare and downsample
+    data = GroupAD.load_data("MNIST", anomaly_class_ind = class_ind, method = method, contamination = 0)
+    if method == "leave-one-in"
+        data = GroupAD.leave_one_in(data; seed=seed)
+    elseif method == "leave-one-out"
+        data = GroupAD.leave_one_out(data; seed=seed)
+    else
+        error("This evaluation only works on MNIST!")
+    end
+    ds = downsample(data; seed = seed)
+
+    for modelpath in modelpaths
+        # load model
+        try
+            training_info = load(modelpath)
+            model = training_info["model"]
+            parameters = training_info["parameters"]
+
+            # this doesn't work because it is a Dict and not NamedTuple
+            # save_entries = merge(training_info, (modelname = modelname, seed = seed, dataset = "MNIST"))
+            # this should probably be enough
+            save_entries = (model = model, modelname = modelname, seed = seed, dataset = "MNIST")
+
+            # any difference to path? like MNIST_downsampled?
+            # _savepath = datadir("experiments/contamination-0.0", modelname, "MNIST", method, "class_index=$(class)/seed=$(seed)")
+            _savepath = datadir("experiments/contamination-0.0", modelname, "MNIST_downsampled", method, "class_index=$(class_ind)/seed=$(seed)")
+
+            # to do: add results (the anomalous functions)
+            # this is results for vae_instance
+            results = results_functions(modelname, model, parameters)
+
+            for result in results
+                if modelname in ["vae_instance", "statistician", "PoolModel"]
+                    GroupAD.experiment_bag(result..., ds, _savepath; save_entries...)
+                else
+                    GroupAD.experiment(result..., ds, _savepath; save_entries...)
+                end
+            end
+        catch e
+            @warn "Model not found."
+        end
+    end
+end
 
 # save this as a contant NamedTuple
 # choose from all_results based on modelname
@@ -205,17 +251,3 @@ function results_functions(modelname, model, parameters)
     )
     return all_results[Symbol(modelname)]
 end
-
-"""
-For given model and method, `collect_models(folder)` goes recursively through the given
-folder and returns all the model paths in that folder.
-
-Then, all it takes is to start a loop and calculate the scores for downsampled instances
-with the function `evaluate_at_downsampled()`.
-"""
-modelname = "vae_basic"
-method = "leave-one-in"
-folder = datadir("experiments", "contamination-0.0", modelname, "MNIST", method)
-model_paths = GroupAD.Evaluation.collect_models(folder)
-
-evaluate_at_downsampled.(model_paths)
