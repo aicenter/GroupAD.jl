@@ -6,8 +6,8 @@ using Statistics
 using EvalMetrics
 using DataFrames
 
-include("utils.jl")
-
 export results_dataframe
+
+include("utils.jl")
 
 end # module

@@ -28,13 +28,23 @@ function collect_scores(target::String)
 end
 
 """
+    collect_models(target::String)
+
+Walk recursively the `target` directory and collects all model files along the way.
+"""
+function collect_models(target::String)
+    files = collect_files(target)
+    return filter(x -> (occursin("model_", string(x))), files)
+end
+
+"""
     results_dataframe_row(target::String)
 
 Returns a DataFrame (single row) from the results file.
 If there are different parameters exported to the DataFrame,
 missing columns are filled with `missing`.
 """
-function results_dataframe_row(target::String)
+function results_dataframe_row(target::String, verb = false)
     data = load(target)
 
     scores_labels = [(data[:val_scores], data[:val_labels]), (data[:tst_scores], data[:tst_labels])]
@@ -44,9 +54,12 @@ function results_dataframe_row(target::String)
 	results = []
 	for (scores, labels) in scores_labels
 		if all(isnan.(scores))
-			@info "score is NaN"
+			if verb
+				@info "score is NaN"
+			end
 			return
 		end
+		
 		scores = Base.vec(scores)
 		roc = roccurve(labels, scores)
 		auc = auc_trapezoidal(roc...)
@@ -62,8 +75,8 @@ function results_dataframe_row(target::String)
 	end
 
     # create a dictionary for the future dataframe
-	@unpack dataset, seed, modelname, npars = data
-	d = @dict dataset seed modelname npars 
+	@unpack dataset, seed, modelname = data
+	d = @dict dataset seed modelname
 	measures_val = Symbol.(["val_AUC", "val_AUPRC", "val_TPR_5", "val_F1_5"])
 	measures_test = Symbol.(["test_AUC", "test_AUPRC", "test_TPR_5", "test_F1_5"])
 	
@@ -82,11 +95,77 @@ function results_dataframe_row(target::String)
     # create the resulting DataFrame (row)
 	hcat(DataFrame(d), df_params)
 end
+function results_dataframe_row(target::String, verb = false)
+	data = []
+	# if the file is not found, returns nothing
+	try
+    	data = load(target)
+	catch e
+		@warn "Model not found."
+		return 
+	end
+
+    scores_labels = [(data[:val_scores], data[:val_labels]), (data[:tst_scores], data[:tst_labels])]
+	setnames = ["validation", "test"]
+
+    # calculate the scores (AUC-ROC, AUC-PR etc.)
+	results = []
+	for (scores, labels) in scores_labels
+		if all(isnan.(scores))
+			if verb
+				@info "score is NaN"
+			end
+			return
+		end
+		
+		scores = Base.vec(scores)
+		roc = roccurve(labels, scores)
+		auc = auc_trapezoidal(roc...)
+		prc = prcurve(labels, scores)
+		auprc = auc_trapezoidal(prc...)
+
+		push!(results, [auc, auprc])
+	end
+
+    # create a dictionary for the future dataframe
+	@unpack dataset, seed, modelname = data
+	d = @dict dataset seed modelname
+	measures_val = Symbol.(["val_AUC", "val_AUPRC"])
+	measures_test = Symbol.(["test_AUC", "test_AUPRC"])
+	
+	for i in 1:length(measures_val)
+		d[measures_val[i]] = results[1][i]
+	end
+	
+	for i in 1:length(measures_test)
+		d[measures_test[i]] = results[2][i]
+	end
+
+    # add the model parameters
+	pars = data[:parameters]
+	df_params = DataFrame(hcat(values(pars)...), vcat(keys(pars)...))
+
+    # create the resulting DataFrame (row)
+	hcat(DataFrame(d), df_params)
+end
 
 function results_dataframe(target::Array{String,1})
-    df = results_dataframe_row(target[1])
-    for i in 2:length(target)
-        df = vcat(df, results_dataframe_row(target[i]), cols=:union)
+	j = 1
+	df = []
+	for i in 1:length(target)
+		r = results_dataframe_row(target[i])
+		if !isnothing(r)
+			df = results_dataframe_row(target[i])
+			break
+		end
+		j += 1
+	end
+
+    for i in j:length(target)
+		r = results_dataframe_row(target[i])
+		if !isnothing(r)
+        	df = vcat(df, r, cols=:union)
+		end
     end
     df
 end
