@@ -1,11 +1,11 @@
 """
-    generate_cardinality_toy(Nn,Na;type=1,seed=nothing)
+    generate_cardinality_toy(Nn,Na;scenario=1,seed=nothing)
 
-Generate dataset from "Apple Paper". There are three types
+Generate dataset from "Apple Paper". There are three scenarios
 of datasets. For more info go to Figure 7 in
 Model-Based Learning for Point Patter Data.
 """
-function generate_cardinality_toy(Nn,Na;type=1,seed=nothing)
+function generate_cardinality_toy(Nn,Na;scenario=1,seed=nothing)
     # set seed
     (seed === nothing) ? nothing : Random.seed!(seed)
 
@@ -14,22 +14,22 @@ function generate_cardinality_toy(Nn,Na;type=1,seed=nothing)
     anomalous_d = MvNormal([1,1],sqrt.([6,2]))
     normal = [rand(normal_d,rand(Poisson(37))) for i in 1:Nn]
 
-    if type==1
+    if scenario==1
          # 1) novelty separated, overlap in cardinality
         anomalous = [rand(anomalous_d,rand(Poisson(37))) for i in 1:Na]
-    elseif type==2
+    elseif scenario==2
         # 2) novelty and normal data partially overlap in feature and cardinality
         mod(Na,3) != 0 ? error("Na can't be divided by 3!") : nothing
         anomalous = vcat(
-            [rand(normal_d,rand(Poisson(6))) for i in 1:Nn÷3-2],
-            [rand(normal_d,rand(Poisson(100))) for i in 1:Na÷3-2],
-            [rand(anomalous_d,rand(Poisson(37))) for i in 1:Na÷3-2],
+            [rand(normal_d,rand(Poisson(5)) + 1) for i in 1:Nn÷3],
+            [rand(normal_d,rand(Poisson(100))) for i in 1:Na÷3],
+            [rand(anomalous_d,rand(Poisson(37))) for i in 1:Na÷3],
         )
         # shuffle the data so that the categories are mixed
         shuffle!(anomalous)
     else
         # 3) low cardinality novelty overlap with normal data
-        anomalous = [rand(normal_d,rand(Poisson(6))) for i in 1:Na]
+        anomalous = [rand(normal_d,rand(Poisson(5)) + 1) for i in 1:Na]
     end
     
     # reset seed
@@ -39,15 +39,15 @@ function generate_cardinality_toy(Nn,Na;type=1,seed=nothing)
 end
 
 """
-    create_apple_toy(Nn=30, Na=30; type=1)
+    create_apple_toy(Nn=30, Na=30; scenario=1)
 
 Returns data for toy problem from the Apple paper (Model-Based Learning for Point Pattern Data).
-Type specifies the scenario used. Nn is the number of normal samples, Na number of anomalous samples.
+scenario specifies the scenario used. Nn is the number of normal samples, Na number of anomalous samples.
 There is no contamination parameter.
 """
-function create_apple_toy(Nn=30, Na=30; type=1, seed=nothing)
+function create_apple_toy(Nn=30, Na=30; scenario=1, seed=nothing)
     # train data
-    normal, anomalous = generate_cardinality_toy(Nn*3, Na*2, type=type, seed=seed)
+    normal, anomalous = generate_cardinality_toy(Nn*3, Na*2, scenario=scenario, seed=seed)
     
     # train data
     train_data = normal[1:Nn]
@@ -58,15 +58,15 @@ function create_apple_toy(Nn=30, Na=30; type=1, seed=nothing)
     val_labels = vcat(zeros(Nn), ones(Na))
 
     # test data
-    test_data = vcat(normal[2*Nn+1:end],anomalous[Na+1:end])
+    test_data = vcat(normal[2*Nn+1:end],anomalous[Na+1:2*Na])
     test_labels = vcat(zeros(Nn), ones(Na))
 
     return ((train_data, train_labels), (val_data, val_labels), (test_data, test_labels))
 end
 
-function load_data(dataset::String, Nn, Na; type=1, seed=nothing)
+function load_data(dataset::String, Nn, Na; scenario=1, seed=nothing)
     if dataset == "toy"
-        data = create_apple_toy(Nn, Na; type=type, seed=seed)
+        data = create_apple_toy(Nn, Na; scenario=scenario, seed=seed)
         return data
     else
         nothing

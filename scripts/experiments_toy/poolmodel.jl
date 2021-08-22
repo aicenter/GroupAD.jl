@@ -20,17 +20,17 @@ s = ArgParseSettings()
         default = "toy"
         arg_type = String
         help = "dataset"
-	"type"
+	"scenario"
         default = 1
         arg_type = Int
-        help = "type of toy dataset"
+        help = "scenario of toy dataset"
    "contamination"
         default = 0.0
         arg_type = Float64
         help = "training data contamination rate"
 end
 parsed_args = parse_args(ARGS, s)
-@unpack dataset, max_seed, type, contamination = parsed_args
+@unpack dataset, max_seed, scenario, contamination = parsed_args
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
@@ -51,9 +51,10 @@ bag_maximum(x) = maximum(x, dims=2)
 """
 function sample_params()
 	par_vec = (
-        2 .^(2:4), 2 .^(1:3), 2 .^(1:3), 2 .^(1:3), ["scalar", "diagonal"],
+        2 .^(2:4), [1,2,3], [1,2,3], [1,2,3], ["scalar", "diagonal"],
         10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"],
-        ["bag_mean", "bag_maximum", "mean_max", "mean_max_card", "sum_stat", "sum_stat_card"],
+        #["bag_mean", "bag_maximum", "mean_max", "mean_max_card", "sum_stat", "sum_stat_card"],
+		["sum_stat", "sum_stat_card"],
         1:Int(1e8)
     )
 	argnames = (:hdim, :predim, :postdim, :edim, :var, :lr, :nlayers, :batchsize, :activation, :poolf, :init_seed)
@@ -121,8 +122,8 @@ end
 This modifies parameters according to data. Default version only returns the input arg. 
 Overload for models where this is needed.
 """
-function edit_params(data, parameters, type)
-	merge(parameters, (scenario = type, ))
+function edit_params(data, parameters, scenario)
+	merge(parameters, (scenario = scenario, ))
 end
 
 ####################################################################
@@ -134,7 +135,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		fit, 
 		edit_params, 
 		max_seed, 
-		type, 
+		scenario, 
 		modelname, 
 		dataset,
 		datadir("experiments/contamination-$(contamination)")
