@@ -169,9 +169,10 @@ gix = g[ix]
 vcat(gix[1], DataFrame(:aggregation => maximum), DataFrame(:aggregation => median), cols=:union)
 
 df_new = vcat(
+    DataFrame(:aggregation => maximum, :dataset => "Web4", :test_AUC_mean => 0),    
     df,
-    DataFrame(:aggregation => maximum, :dataset => "Web4", :test_AUC_mean => 0),
     DataFrame(:aggregation => median, :dataset => "Web4", :test_AUC_mean => 0), cols=:union)
+sort!(df_new, :dataset)
 
 mill_barplots(
     df_new, "$(modelname)_agg";
@@ -193,19 +194,22 @@ mill_barplots(
 # for PoolModel
 modelname = "PoolModel"
 df = poolmodel
-g = groupby(df, :dataset)
+#poolmodel = mill_results("PoolModel", mill_datasets, :poolf)
+g = groupby(poolmodel, :dataset)
+gs = map(x -> sort(x, :poolf), g)
 
-ix = findall(x -> size(x,1) != 6, g)
-gix = g[ix]
+ix = findall(x -> size(x,1) != 6, gs)
+gix = gs[ix]
 gix[1]
 
 using GroupAD.Models: sum_stat, sum_stat_card
 df_new = vcat(
-    df,
+    vcat(gs...),
     DataFrame(:poolf => [sum_stat, sum_stat_card], :dataset => ["Musk2", "Musk2"], :test_AUC_mean => [0,0]),
     DataFrame(:poolf => [sum_stat, sum_stat_card], :dataset => ["Tiger", "Tiger"], :test_AUC_mean => [0,0]),
     cols=:union
 )
+sort!(df_new, :dataset)
 
 mill_barplots(
     df_new, "$(modelname)_poolf";

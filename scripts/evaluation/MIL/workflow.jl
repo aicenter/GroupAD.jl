@@ -212,3 +212,42 @@ function mill_barplots(df, name, labels; legend_title="Model", ind=:, w1 = 0.5, 
     savefig(plotsdir("MIL", "$name.pdf"))
 end
 
+function mnist_barplots(df, name; legend_title="Score", ind=:, w1 = 0.5, w2 = 0.8, kwargs...)
+    _, M, labels = groupedbar_matrix(df; kwargs...)
+    groupnames = map(i -> "$i", 0:9)
+
+    gb1 = groupedbar(
+        groupnames[1:4], M[1:4, ind], labels=labels, color_palette=:tab20,
+        ylabel="test AUC", legendtitle=legend_title, legend=:outerright,
+        ylims=(0,1), bar_width=w1
+    )
+    #savefig(plotsdir("MIL", "test1.pdf"))
+    gb2 = groupedbar(
+        groupnames[5:10], M[5:10, ind], labels=labels, color_palette=:tab20,
+        ylabel="test AUC", legendtitle=legend_title, legend=:none,
+        ylims=(0,1), bar_width=w2,xlabel="digit"
+    )
+
+    p = plot(gb1,gb2,layout = (2,1), guidefontsize=5, tickfontsize=5, legendfontsize=5, legendtitlefontsize=5, size=(400,400))
+    savefig(plotsdir("MNIST", "$name.pdf"))
+end
+function mnist_barplots(df, name, labels; legend_title="Score", ind=:, w1 = 0.5, w2 = 0.8, kwargs...)
+    _, M, _ = groupedbar_matrix(df; kwargs...)
+    groupnames = map(i -> "$i", 0:9)
+
+    gb1 = groupedbar(
+        groupnames[1:4], M[1:4, ind], labels=labels, color_palette=:tab20,
+        ylabel="test AUC", legendtitle=legend_title, legend=:outerright,
+        ylims=(0,1), bar_width=w1
+    )
+    #savefig(plotsdir("MIL", "test1.pdf"))
+    gb2 = groupedbar(
+        groupnames[5:10], M[5:10, ind], labels=labels, color_palette=:tab20,
+        ylabel="test AUC", legendtitle=legend_title, legend=:none,
+        ylims=(0,1), bar_width=w2,xlabel="digit"
+    )
+    #savefig(plotsdir("MIL", "test3.pdf"))
+
+    p = plot(gb1,gb2,layout = (2,1), guidefontsize=5, tickfontsize=5, legendfontsize=5, legendtitlefontsize=5, size=(400,400))
+    savefig(plotsdir("MNIST", "$name.pdf"))
+end
