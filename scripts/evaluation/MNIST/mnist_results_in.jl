@@ -18,7 +18,8 @@ include(scriptsdir("evaluation", "MIL", "workflow.jl"))
 ####################
 
 # first empty Dictionary
-mnist_results_in = Dict()
+#mnist_results_in = Dict()
+mnist_results_in = load(datadir("dataframes", "mnist_results_in.bson"))
 
 modelname = "knn_basic"
 modelname = "vae_basic"
@@ -38,30 +39,28 @@ end
 rdf = vcat(results...)
 push!(mnist_results_in, modelname => rdf)
 save(datadir("dataframes", "mnist_results_in.bson"), mnist_results_in)
-mnist_results_in = load(datadir("dataframes", "mnist_results_in.bson"))
 
-bar(map(i -> "$i", 0:9), rdf[:, :test_AUC_mean], legend=:none,xlabel="digit", ylabel="AUC",ylims=(0,1))
-savefig(plotsdir("MNIST", "$(modelname)_leave-in.png"))
-
-knn_basic = insertcols!(mnist_results_in["knn_basic"], :model => "knn_basic")
-knn_basic = mnist_results_in["knn_basic"]
-vae_basic = insertcols!(mnist_results_in["vae_basic"], :model => "vae_basic")
-vae_basic = mnist_results_in["vae_basic"]
-vae_instance = insertcols!(mnist_results_in["vae_instance"], :model => "vae_instance")
-vae_instance = mnist_results_in["vae_instance"]
-statistician = insertcols!(mnist_results_in["statistician"], :model => "statistician")
-statistician = mnist_results_in["statistician"]
-
-knn_basic, vae_basic, vae_instance, statistician = map(modelname -> mnist_results_in[modelname], ["knn_basic", "vae_basic", "vae_instance", "statistician"])
+# add :model columns
+modelnames = ["knn_basic", "vae_basic", "vae_instance", "statistician"]
+model_names = ["kNNagg", "VAEagg", "VAE", "NS"]
+knn_basic, vae_basic, vae_instance, statistician = map(m-> insertcols!(mnist_results_in[m], :model => m), modelnames)
 
 df_all = vcat(knn_basic, vae_basic, vae_instance, statistician, cols=:union)
 df_red = df_all[:, [:model, :class, :test_AUC_mean]]
-sort!(df_red, [:class, :model])
+#sort!(df_red, [:class, :model])
 groupnames, M, labels = groupedbar_matrix(df_red, group=:class, cols=:model, value=:test_AUC_mean)
+idx = [1,3,4,2]
+vcat(hcat(labels[idx]...), hcat(model_names...))
+
+mnist_barplots(
+    df_red, "all_models-in", model_names; ind = idx, 
+    group=:class, cols=:model, value=:test_AUC_mean,
+    w1=0.8, w2=0.85,legend_title="Model"
+)
 
 groupedbar(
     map(i -> "$i", 0:9), M, labels=labels, ylims=(0,1),
-    ylabel="test AUC", xlabel="digit", legend=:outerright
+    ylabel="test AUC", xlabel="digit", legend=:outerright,
 )
 savefig(plotsdir("MNIST", "groupedbar_leave-in.png"))
 
@@ -72,11 +71,13 @@ savefig(plotsdir("MNIST", "groupedbar_leave-in.png"))
 ### leave-one-in #######
 ########################
 
-mnist_results_in_scores = Dict()
+#mnist_results_in_scores = Dict()
+mnist_results_in_scores = load(datadir("dataframes", "mnist_results_in_scores.bson"))
 
 modelname = "knn_basic"
 modelname = "vae_basic"
 modelname = "vae_instance"
+modelname = "statistician"
 method = "leave-one-in"
 class = 10
 folder = datadir("experiments", "contamination-0.0", modelname, "MNIST", method, "class_index=$class")
@@ -91,58 +92,74 @@ end
 rdf = vcat(results...)
 push!(mnist_results_in_scores, modelname => rdf)
 save(datadir("dataframes", "mnist_results_in_scores.bson"), mnist_results_in_scores)
-mnist_results_in_scores = load(datadir("dataframes", "mnist_results_in_scores.bson"))
 
 # groupedbarplot for :aggregation, or :score, :type etc.
 # kNN
 modelname = "knn_basic"
-knn_basic = mnist_results_in_scores["knn_basic"]
+knn_basic = mnist_results_in_scores[modelname]
 g = groupby(sort(knn_basic, :val_AUC_mean, rev=true), [:class,:aggregation])
 gm = map(x -> DataFrame(x[1,:]), g)
-gdf = sort(vcat(gm...), [:class, :aggregation])
+gdf = vcat(gm...)
 groupnames, M, labels = groupedbar_matrix(gdf, group=:class, cols=:aggregation, value=:test_AUC_mean)
+groupnames
 
 groupedbar(
     map(i -> "$i", 0:9), M, labels=labels, legend=:bottomright,
     ylims=(0,1), ylabel="test AUC", xlabel="digit"
 )
-savefig(plotsdir("MNIST", "$(modelname)_groupedbar_leave-in.png"))
+savefig(plotsdir("MNIST", "png", "$(modelname)_agg-in.png"))
+savefig(plotsdir("MNIST", "pdf", "$(modelname)_agg-in.pdf"))
 
 # VAEagg
 modelname = "vae_basic"
-vae_basic = mnist_results_in_scores["vae_basic"]
+vae_basic = mnist_results_in_scores[modelname]
 g = groupby(sort(vae_basic, :val_AUC_mean, rev=true), [:class,:aggregation])
 gm = map(x -> DataFrame(x[1,:]), g)
-gdf = sort(vcat(gm...), [:class, :aggregation])
+gdf = vcat(gm...)
 groupnames, M, labels = groupedbar_matrix(gdf, group=:class, cols=:aggregation, value=:test_AUC_mean)
 
 groupedbar(
     map(i -> "$i", 0:9), M, labels=labels, legend=:bottomright,
     ylims=(0,1), ylabel="test AUC", xlabel="digit"
 )
-savefig(plotsdir("MNIST", "$(modelname)_groupedbar_leave-in.png"))
+savefig(plotsdir("MNIST", "png", "$(modelname)_agg-in.png"))
+savefig(plotsdir("MNIST", "pdf", "$(modelname)_agg-in.pdf"))
 
 
 # VAE
 modelname = "vae_instance"
-vae_instance = mnist_results_in_scores["vae_instance"]
+vae_instance = mnist_results_in_scores[modelname]
 g = groupby(sort(vae_instance, :val_AUC_mean, rev=true), [:class,:type])
 gm = map(x -> DataFrame(x[1,:]), g)
-gdf = sort(vcat(gm...), [:class, :type])
+gdf = vcat(gm...)
 groupnames, M, labels = groupedbar_matrix(gdf, group=:class, cols=:type, value=:test_AUC_mean)
 
-idx = [11,8,7,4,5,6,9,10,3,1,2]
-new_labels = ["sum" "mean" "max" "logU" "Po" "Po + logU" "LN" "LN + logU" "Chamfer" "MMD-G" "MMD-IMQ"]
-
-groupedbar(
-    map(i -> "$i", 0:9), M[:, idx], labels=hcat(labels[idx]...), legend=:bottomright,
-    ylims=(0,1), ylabel="test AUC", xlabel="digit", color_palette=:tab20,
-    size=(800,400),
-)
-savefig(plotsdir("MNIST", "$(modelname)_groupedbar_leave-in2.png"))
+idx = [11,8,7,4,5,6,9,10,1,2,3]
+new_labels = ["sum" "mean" "maximum" "logU" "LN" "LN + logU" "Po" "Po + logU" "MMD-G" "MMD-IMQ" "Chamfer"]
+groupnames
+vcat(hcat(labels[idx]...), new_labels)
 
 mnist_barplots(
-    gdf, "vae_in", new_labels; ind = idx, 
+    gdf, "vae-in", new_labels; ind = idx, 
+    group=:class, cols=:type, value=:test_AUC_mean,
+    w1=0.8, w2=0.85
+)
+
+# NS
+modelname = "statistician"
+statistician = mnist_results_in_scores[modelname]
+g = groupby(sort(statistician, :val_AUC_mean, rev=true), [:class,:type])
+gm = map(x -> DataFrame(x[1,:]), g)
+gdf = vcat(gm...)
+groupnames, M, labels = groupedbar_matrix(gdf, group=:class, cols=:type, value=:test_AUC_mean)
+groupnames
+
+idx = [11,8,7,4,5,6,9,10,1,2,3]
+new_labels = ["sum" "mean" "maximum" "logU" "LN" "LN + logU" "Po" "Po + logU" "MMD-G" "MMD-IMQ" "Chamfer"]
+vcat(hcat(labels[idx]...), new_labels)
+
+mnist_barplots(
+    gdf, "statistician-in", new_labels; ind = idx, 
     group=:class, cols=:type, value=:test_AUC_mean,
     w1=0.8, w2=0.85
 )

@@ -19,7 +19,7 @@ mill_datasets = [
     "Tiger", "UCSBBreastCancer", "Web1", "Web2", "Web3", "Web4", "WinterWren"
 ]
 mill_names = [
-    "BrownCreeper", "CorelBeach", "CorelAfrican", "Elephant", "Fox", "Musk1", "Musk2",
+    "BrownCreeper", "CorelAfrican", "CorelBeach", "Elephant", "Fox", "Musk1", "Musk2",
     "Mut1", "Mut2", "News1", "News2", "News3", "Protein",
     "Tiger", "UCSB-BC", "Web1", "Web2", "Web3", "Web4", "WinterWren"
 ]
@@ -77,7 +77,11 @@ df = vcat(knn_basic, vae_basic, vae_instance, statistician, poolmodel, mgmm, col
 
 # full barplot
 new_labels = ["kNNagg" "VAEagg" "VAE" "NS" "PoolModel" "MGMM"]
-mill_barplots(df, new_labels, "mill_models"; group=:dataset, cols=:model, value=:test_AUC_mean)
+groupnames, M, labels = groupedbar_matrix(df; group=:dataset, cols=:model, value=:test_AUC_mean)
+idx = [3,5,6,4,2,1]
+vcat(hcat(labels[idx]...), new_labels)
+
+mill_barplots(df, "mill_models", new_labels; ind=idx, group=:dataset, cols=:model, value=:test_AUC_mean)
 
 # results from mill_results_scores
 # results for each model
@@ -86,8 +90,10 @@ knn_basic, vae_basic, vae_instance, statistician, poolmodel, mgmm = map(key -> m
 # for VAE
 modelname = "vae_instance"
 df = vae_instance
-idx = [8, 5, 4, 1, 7, 6, 3, 2, 11, 9, 10]
-new_labels = ["sum" "mean" "max" "logU" "Po" "Po + logU" "LN" "LN + logU" "Chamfer" "MMD-G" "MMD-IMQ"]
+idx = [11,8,7,4,5,6,9,10,1,2,3]
+new_labels = ["sum" "mean" "maximum" "logU" "LN" "LN + logU" "Po" "Po + logU" "MMD-G" "MMD-IMQ" "Chamfer"]
+groupnames, M, labels = groupedbar_matrix(df; group=:dataset, cols=:type, value=:test_AUC_mean)
+vcat(hcat(labels[idx]...), new_labels)
 
 mill_barplots(
     df, modelname, new_labels;
@@ -98,8 +104,10 @@ mill_barplots(
 # for NS
 modelname = "statistician"
 df = statistician
-idx = [8, 5, 4, 1, 7, 6, 3, 2, 11, 9, 10]
-new_labels = ["sum" "mean" "max" "logU" "Po" "Po + logU" "LN" "LN + logU" "Chamfer" "MMD-G" "MMD-IMQ"]
+idx = [11,8,7,4,5,6,9,10,1,2,3]
+new_labels = ["sum" "mean" "max" "logU" "LN" "LN + logU" "Po" "Po + logU" "MMD-G" "MMD-IMQ" "Chamfer"]
+groupnames, M, labels = groupedbar_matrix(df; group=:dataset, cols=:type, value=:test_AUC_mean)
+vcat(hcat(labels[idx]...), new_labels)
 
 mill_barplots(
     df, modelname, new_labels;
@@ -112,6 +120,8 @@ modelname = "PoolModel"
 df = poolmodel
 idx = [3,1,2]
 new_labels = ["Chamfer" "MMD-G" "MMD-IMQ"]
+groupnames, M, labels = groupedbar_matrix(df; group=:dataset, cols=:type, value=:test_AUC_mean)
+vcat(hcat(labels[idx]...), new_labels)
 
 mill_barplots(
     df, modelname, new_labels;
@@ -122,6 +132,7 @@ mill_barplots(
 # for knn model
 modelname = "knn_basic"
 df = knn_basic
+groupnames, M, labels = groupedbar_matrix(df; group=:dataset, cols=:distance, value=:test_AUC_mean)
 
 mill_barplots(
     df, modelname;
@@ -132,8 +143,10 @@ mill_barplots(
 # for vae_basic
 modelname = "vae_basic"
 df = vae_basic
-idx = [3,1,2]
+idx = [1,3,2]
 new_labels = ["rec" "rec-sampled" "rec-mean"]
+groupnames, M, labels = groupedbar_matrix(df; group=:dataset, cols=:score, value=:test_AUC_mean)
+vcat(hcat(labels[idx]...), new_labels)
 
 mill_barplots(
     df, modelname, new_labels; ind = idx,
@@ -144,12 +157,12 @@ mill_barplots(
 # for MGMM
 modelname = "MGMM"
 df = mgmm
-idx = [1,3,2]
-new_labels = labels[idx]
 new_labels = ["point" "topic" "point + topic"]
+groupnames, M, labels = groupedbar_matrix(df; group=:dataset, cols=:score, value=:test_AUC_mean)
+vcat(labels, new_labels)
 
 mill_barplots(
-    df, modelname, new_labels; ind = idx,
+    df, modelname, new_labels;
     group=:dataset, cols=:score, value=:test_AUC_mean,
     legend_title="Score"
     )
@@ -169,9 +182,9 @@ gix = g[ix]
 vcat(gix[1], DataFrame(:aggregation => maximum), DataFrame(:aggregation => median), cols=:union)
 
 df_new = vcat(
-    DataFrame(:aggregation => maximum, :dataset => "Web4", :test_AUC_mean => 0),    
+    DataFrame(:aggregation => "maximum", :dataset => "Web4", :test_AUC_mean => 0),    
     df,
-    DataFrame(:aggregation => median, :dataset => "Web4", :test_AUC_mean => 0), cols=:union)
+    DataFrame(:aggregation => "median", :dataset => "Web4", :test_AUC_mean => 0), cols=:union)
 sort!(df_new, :dataset)
 
 mill_barplots(
@@ -202,17 +215,19 @@ ix = findall(x -> size(x,1) != 6, gs)
 gix = gs[ix]
 gix[1]
 
-using GroupAD.Models: sum_stat, sum_stat_card
+#using GroupAD.Models: sum_stat, sum_stat_card
 df_new = vcat(
     vcat(gs...),
-    DataFrame(:poolf => [sum_stat, sum_stat_card], :dataset => ["Musk2", "Musk2"], :test_AUC_mean => [0,0]),
-    DataFrame(:poolf => [sum_stat, sum_stat_card], :dataset => ["Tiger", "Tiger"], :test_AUC_mean => [0,0]),
+    DataFrame(:poolf => ["sum_stat", "sum_stat_card"], :dataset => ["Musk2", "Musk2"], :test_AUC_mean => [0,0]),
+    DataFrame(:poolf => ["sum_stat", "sum_stat_card"], :dataset => ["Tiger", "Tiger"], :test_AUC_mean => [0,0]),
     cols=:union
 )
 sort!(df_new, :dataset)
 
+new_labels = ["maximum", "mean", "meanmax", "meanmax + card", "sumstat", "sumstat + card"]
+
 mill_barplots(
-    df_new, "$(modelname)_poolf";
+    df_new, "$(modelname)_poolf", new_labels;
     group=:dataset, cols=:poolf, value=:test_AUC_mean,
     legend_title="Pooling function"
 )

@@ -9,9 +9,9 @@ using BSON
 
 include(scriptsdir("evaluation", "MIL", "workflow.jl"))
 
-####################
-### leave-one-in ###
-####################
+##########################################
+############## leave-one-in ##############
+##########################################
 
 mnist_results_in = load(datadir("dataframes", "mnist_results_in.bson"))
 
@@ -63,9 +63,9 @@ t = pretty_table(
     backend=:latex, tf=tf_latex_booktabs, nosubheader=true
 )
 
-#####################
-### leave-one-out ###
-#####################
+###########################################
+############## leave-one-out ##############
+###########################################
 
 mnist_results_out = load(datadir("dataframes", "mnist_results_out.bson"))
 
