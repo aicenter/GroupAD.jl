@@ -7,7 +7,7 @@ chosen metric, default is validation AUC.
 If `groupkey` is present, returns the best model for each category of groupkey.
 Group key can be both a symbol or an array of symbols.
 """
-function find_best_model(folder::String; metric=:val_AUC)
+function find_best_model(folder::String; metric=:val_AUC, save_best_seed=false)
     #folder = datadir("experiments", "contamination-0.0", modelname, dataset)
     data = GroupAD.Evaluation.results_dataframe(folder)
     point = load(GroupAD.Evaluation.collect_scores(folder)[1])
@@ -26,6 +26,19 @@ function find_best_model(folder::String; metric=:val_AUC)
     cdf = combine(g, map(x -> x => mean, metricsnames))
     sort!(cdf, :val_AUC_mean, rev=true)
     best_model = cdf[1,:]
+
+    if save_best_seed
+        _nm = names(best_model)
+        nm = _nm[occursin.("mean", _nm) .== 0]
+        nm = nm[occursin.("L", nm) .== 0]
+        values = best_model[[nm...]]
+
+        idx = findall(row -> row[nm] == values, eachrow(data))
+        s = sort(data[idx, :], :val_AUC, rev = true)[1,:][:seed]
+        return DataFrame(best_model), s
+    else
+        return best_model
+    end
 end
 function find_best_model(folder, groupkey, metric=:val_AUC)
     #folder = datadir("experiments", "contamination-0.0", modelname, dataset, "scenario=$scenario")

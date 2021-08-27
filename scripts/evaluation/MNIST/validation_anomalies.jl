@@ -1,91 +1,24 @@
+using DrWatson
+@quickactivate
+using GroupAD
+using GroupAD: Evaluation
+using DataFrames
+using Statistics
+using EvalMetrics
 using Random
 using StatsBase
 using BSON
+
 using Plots
+using StatsPlots
 ENV["GKSwstype"] = "100"
 
-"""
-function results_dataframe_row_at_val(target::String, verb = false)
-    data = load(target)
-    seed = data[:seed]
-    no_anomalies = Int(sum(data[:val_labels]))
-    val_an = [1, 2, 5, 10, 20, 50, 100]
-
-    scores_labels = [(data[:val_scores], data[:val_labels]), (data[:tst_scores], data[:tst_labels])]
-	setnames = ["validation", "test"]
-
-    results_val = []
-    results_test = []
-    for no in val_an
-        if no < no_anomalies
-            # calculate the scores (AUC-ROC, AUC-PR etc.)
-            k = 1
-            for (scores, labels) in scores_labels
-                if all(isnan.(scores))
-                    if verb
-                        @info "score is NaN"
-                    end
-                    return
-                end
-                
-                an_idx = findall(x -> x == 1, labels)
-                Random.seed!(seed)
-                chosen_idx = sample(an_idx, no)
-
-                sc = vcat(
-                    scores[labels .== 0],
-                    scores[chosen_idx]
-                )
-
-                lb = vcat(
-                    labels[labels .== 0],
-                    labels[chosen_idx]
-                )
-
-                sc = Base.vec(sc)
-                roc = roccurve(lb, sc)
-                auc = auc_trapezoidal(roc...)
-                prc = prcurve(lb, sc)
-                auprc = auc_trapezoidal(prc...)
-
-                if k == 1
-                    push!(results_val, [no, auc, auprc])
-                else
-                    push!(results_test, [auc, auprc])
-                end
-                k += 1
-            end
-        end
-    end
-
-    # create a dictionary for the future dataframe
-	@unpack dataset, seed, modelname = data
-	d = @dict dataset seed modelname
-	measures_val = Symbol.(["no_anomalous", "val_AUC", "val_AUPRC"])
-	measures_test = Symbol.(["test_AUC", "test_AUPRC"])
-
-    val_df = DataFrame(hcat(results_val...)', measures_val)
-    test_df = DataFrame(hcat(results_test...)', measures_test)
-    df = hcat(val_df, test_df)
-
-    # add the model parameters
-	pars = data[:parameters]
-	df_params = repeat(DataFrame(hcat(values(pars)...), vcat(keys(pars)...)), size(df, 1))
-
-    # create the resulting DataFrame (row)
-	hcat(df, df_params)
-end
-"""
+include(scriptsdir("evaluation", "MIL", "workflow.jl"))
 
 function results_dataframe_row_at_val_over_seeds(target::String; verb = false, seeds = 50)
     data = load(target)
     no_anomalies = Int(sum(data[:val_labels]))
-    val_an = [0, 1, 2, 5, 10, 20, 50, 100]
-    if no_anomalies > 100
-        val_an = vcat(val_an, no_anomalies)
-    else
-        val_an = vcat(val_an[val_an .< no_anomalies], no_anomalies)
-    end
+    val_an = [0, 1, 2, 5, 10, 20, 30, 50]
 
     # calculate average validation AUC for given number of anomalies
     scores = data[:val_scores]
@@ -276,50 +209,59 @@ function plot_at_val_test!(df::DataFrame, label::String, p)
     p = plot!(df[:, :no_anomalous], df[:, :test_AUC_mean], marker=:circle, label=label, legend=:outerright)
 end
 
+class = 10
 # test
-folder = datadir("experiments", "contamination-0.0", "vae_basic", "BrownCreeper")
+folder = datadir("experiments", "contamination-0.0", "vae_basic", "MNIST", "leave-one-in", "class_index=$class")
 best_models = find_best_models_at_val(folder, 20)
-plot_at_val_test(best_models, "VAEagg")
-savefig(plotsdir("validation", "BrownCreeper_vaeagg_test.png"))
+p = plot_at_val_test(best_models, "VAEagg")
+wsave(plotsdir("validation_MNIST", "leave-one-in", "class_index=$(class)_vaeagg_test.png"), p)
 
-results_at_validation = Dict()
-results_at_validation = load(datadir("dataframes", "at_validation", "mill_validation.bson"))
+# test
+class = 10
 
-for d in mill_datasets
-    @info "Starting computation for $d dataset."
+best_models = find_best_models_at_val(folder, 20)
+p = plot_at_val_test(best_models, "VAEagg")
+wsave(plotsdir("validation_MNIST", "leave-one-out", "class_index=$(class)_vaeagg_test.png"), p)
+
+mnist_results_in = Dict()
+results_at_validation = load(datadir("dataframes", "at_validation_MNIST", "mnist_validation_in.bson"))
+
+modelnames = ["knn_basic", "vae_basic", "vae_instance", "statistician"]
+for class in 1:10
+    @info "Starting computation for class index $class."
     p = plot()
     dres = Dict()
     for modelname in modelnames
-        folder = datadir("experiments", "contamination-0.0", modelname, d)
-        best_models = find_best_models_at_val(folder, 50)
+        folder = datadir("experiments", "contamination-0.0", modelname, "MNIST", "leave-one-in", "class_index=$class")
+        best_models = find_best_models_at_val(folder, 20)
         @info "Best $modelname found."
         push!(dres, modelname => best_models)
         p = plot_at_val_test!(best_models, modelname, p)
     end
     p
-    #savefig(plotsdir("validation", "all", "$(d).png"))
-    wsave(plotsdir("validation", "all", "$(d).png"), p)
-    push!(results_at_validation, d => dres)
-    wsave(datadir("dataframes", "at_validation", "mill_validation.bson"), results_at_validation)
+    wsave(plotsdir("validation_MNIST", "leave-one-in", "class_index=$(class).png"), p)
+    push!(mnist_results_in, class => dres)
+    wsave(datadir("dataframes", "at_validation_MNIST", "mnist_validation_in.bson"), mnist_results_in)
 end
 
-results_at_validation0 = Dict()
-results_at_validation0 = load(datadir("dataframes", "at_validation", "mill_validation0.bson"))
 
-for d in mill_datasets[2:end]
-    @info "Starting computation for $d dataset."
+mnist_results_out = Dict()
+results_at_validation = load(datadir("dataframes", "at_validation_MNIST", "mnist_validation_out.bson"))
+
+modelnames = ["knn_basic", "vae_basic", "vae_instance"]#, "statistician"]
+for class in 1:10
+    @info "Starting computation for class index $class."
     p = plot()
     dres = Dict()
     for modelname in modelnames
-        folder = datadir("experiments", "contamination-0.0", modelname, d)
-        best_models = find_best_models_at_val(folder, 50)
+        folder = datadir("experiments", "contamination-0.0", modelname, "MNIST", "leave-one-out", "class_index=$class")
+        best_models = find_best_models_at_val(folder, 20)
         @info "Best $modelname found."
         push!(dres, modelname => best_models)
         p = plot_at_val_test!(best_models, modelname, p)
     end
     p
-    #savefig(plotsdir("validation", "all", "$(d).png"))
-    wsave(plotsdir("validation", "all_0", "$(d).png"), p)
-    push!(results_at_validation0, d => dres)
-    wsave(datadir("dataframes", "at_validation", "mill_validation0.bson"), results_at_validation0)
+    wsave(plotsdir("validation_MNIST", "leave-one-out", "class_index=$(class).png"), p)
+    push!(mnist_results_out, class => dres)
+    wsave(datadir("dataframes", "at_validation_MNIST", "mnist_validation_out.bson"), mnist_results_out)
 end
