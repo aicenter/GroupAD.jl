@@ -19,7 +19,7 @@ include(scriptsdir("evaluation", "MIL", "workflow.jl"))
 
 # first empty Dictionary
 #mnist_results_in = Dict()
-mnist_results_in = load(datadir("dataframes", "mnist_results_in.bson"))
+mnist_results_in = load(datadir("results", "MNIST", "mnist_results_in.bson"))
 
 modelname = "knn_basic"
 modelname = "vae_basic"
@@ -39,7 +39,7 @@ for class in 1:10
 end
 rdf = vcat(results...)
 push!(mnist_results_in, modelname => rdf)
-save(datadir("dataframes", "mnist_results_in.bson"), mnist_results_in)
+save(datadir("results", "MNIST", "mnist_results_in.bson"), mnist_results_in)
 
 # add :model columns
 modelnames = ["knn_basic", "vae_basic", "vae_instance", "statistician", "PoolModel"]
@@ -73,7 +73,7 @@ savefig(plotsdir("MNIST", "groupedbar_leave-in.png"))
 ########################
 
 #mnist_results_in_scores = Dict()
-mnist_results_in_scores = load(datadir("dataframes", "mnist_results_in_scores.bson"))
+mnist_results_in_scores = load(datadir("results", "MNIST", "mnist_results_in_scores.bson"))
 
 modelname = "knn_basic"
 modelname = "vae_basic"
@@ -93,7 +93,7 @@ for class in 1:10
 end
 rdf = vcat(results...)
 push!(mnist_results_in_scores, modelname => rdf)
-save(datadir("dataframes", "mnist_results_in_scores.bson"), mnist_results_in_scores)
+save(datadir("results", "MNIST", "mnist_results_in_scores.bson"), mnist_results_in_scores)
 
 # groupedbarplot for :aggregation, or :score, :type etc.
 # kNN

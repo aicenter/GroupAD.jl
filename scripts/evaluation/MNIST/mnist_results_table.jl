@@ -13,7 +13,7 @@ include(scriptsdir("evaluation", "MIL", "workflow.jl"))
 ############## leave-one-in ##############
 ##########################################
 
-mnist_results_in = load(datadir("dataframes", "mnist_results_in.bson"))
+mnist_results_in = load(datadir("results", "MNIST", "mnist_results_in.bson"))
 
 #model_names = ["kNNagg", "VAEagg", "VAE", "NS", "PoolModel", "MGMM"]
 model_names = ["kNNagg", "VAEagg", "VAE", "NS", "PoolModel"]
@@ -67,7 +67,7 @@ t = pretty_table(
 ############## leave-one-out ##############
 ###########################################
 
-mnist_results_out = load(datadir("dataframes", "mnist_results_out.bson"))
+mnist_results_out = load(datadir("results", "MNIST", "mnist_results_out.bson"))
 
 #model_names = ["kNNagg", "VAEagg", "VAE", "NS", "PoolModel", "MGMM"]
 model_names = ["kNNagg", "VAEagg", "VAE"]

@@ -14,7 +14,7 @@ using BSON
 include(scriptsdir("evaluation", "MIL", "workflow.jl"))
 
 # load results dataframes
-mill_results_collection = load(datadir("dataframes", "mill_results_collection.bson"))
+mill_results_collection = load(datadir("results", "MIL", "mill_results_collection.bson"))
 knn_basic, vae_basic, vae_instance, statistician, poolmodel, mgmm = map(key -> mill_results_collection[key], modelnames)
 modelvec = [knn_basic, vae_basic, vae_instance, statistician, poolmodel, mgmm]
 # add modelname

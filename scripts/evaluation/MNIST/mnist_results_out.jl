@@ -17,7 +17,7 @@ include(scriptsdir("evaluation", "MIL", "workflow.jl"))
 ### leave-one-out ###
 #####################
 #mnist_results_out = Dict()
-mnist_results_out = load(datadir("dataframes", "mnist_results_out.bson"))
+mnist_results_out = load(datadir("results", "MNIST", "mnist_results_out.bson"))
 
 modelname = "knn_basic"
 modelname = "vae_basic"
@@ -35,7 +35,7 @@ for class in 1:10
 end
 rdf = vcat(results...)
 push!(mnist_results_out, modelname => rdf)
-save(datadir("dataframes", "mnist_results_out.bson"), mnist_results_out)
+save(datadir("results", "MNIST", "mnist_results_out.bson"), mnist_results_out)
 
 # add :model columns
 modelnames = ["knn_basic", "vae_basic", "vae_instance"]
@@ -64,7 +64,7 @@ mnist_barplots(
 ########################
 
 #mnist_results_out_scores = Dict()
-mnist_results_out_scores = load(datadir("dataframes", "mnist_results_out_scores.bson"))
+mnist_results_out_scores = load(datadir("results", "MNIST", "mnist_results_out_scores.bson"))
 
 modelname = "knn_basic"
 modelname = "vae_basic"
@@ -81,7 +81,7 @@ for class in 1:10
 end
 rdf = vcat(results...)
 push!(mnist_results_out_scores, modelname => rdf)
-save(datadir("dataframes", "mnist_results_out_scores.bson"), mnist_results_out_scores)
+save(datadir("results", "MNIST", "mnist_results_out_scores.bson"), mnist_results_out_scores)
 
 
 knn_basic, vae_basic, vae_instance = map(m-> mnist_results_out_scores[m], modelnames)

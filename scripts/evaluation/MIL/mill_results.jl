@@ -60,9 +60,8 @@ save(datadir("dataframes", "mill_results_scores_agg.bson"), mill_results_scores_
 
 
 # if already calculated, just load the data
-mill_results_collection = load(datadir("dataframes", "mill_results_collection.bson"))
-mill_results_scores = load(datadir("dataframes", "mill_results_scores.bson"))
-mill_results_scores_agg = load(datadir("dataframes", "mill_results_scores_agg.bson"))
+mill_results_collection = load(datadir("results", "MIL", "mill_results_collection.bson"))
+mill_results_scores_agg = load(datadir("results", "MIL", "mill_results_scores_agg.bson"))
 
 
 ###################################################
