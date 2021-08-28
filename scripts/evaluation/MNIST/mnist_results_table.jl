@@ -16,14 +16,14 @@ include(scriptsdir("evaluation", "MIL", "workflow.jl"))
 mnist_results_in = load(datadir("dataframes", "mnist_results_in.bson"))
 
 #model_names = ["kNNagg", "VAEagg", "VAE", "NS", "PoolModel", "MGMM"]
-model_names = ["kNNagg", "VAEagg", "VAE", "NS"]
-modelnames = ["knn_basic", "vae_basic", "vae_instance", "statistician"]
+model_names = ["kNNagg", "VAEagg", "VAE", "NS", "PoolModel"]
+modelnames = ["knn_basic", "vae_basic", "vae_instance", "statistician", "PoolModel"]
 modelvec = map(key -> mnist_results_in[key], modelnames)
-knn_basic, vae_basic, vae_instance, statistician = map(key -> mnist_results_in[key], modelnames)
+knn_basic, vae_basic, vae_instance, statistician, poolmodel = map(key -> mnist_results_in[key], modelnames)
 # add modelname
 #knn_basic, vae_basic, vae_instance, statistician, poolmodel, mgmm = map((d, m) -> insertcols!(d, :model => m), modelvec, modelnames)
-knn_basic, vae_basic, vae_instance, statistician = map((d, m) -> insertcols!(d, :model => m), modelvec, modelnames)
-df = vcat(knn_basic, vae_basic, vae_instance, statistician, cols=:union)
+knn_basic, vae_basic, vae_instance, statistician, poolmodel = map((d, m) -> insertcols!(d, :model => m), modelvec, modelnames)
+df = vcat(knn_basic, vae_basic, vae_instance, statistician, poolmodel, cols=:union)
 
 # create dataframe
 df_red = df[:, [:class, :model, :val_AUC_mean, :test_AUC_mean, :val_AUPRC_mean, :test_AUPRC_mean]]
@@ -38,7 +38,7 @@ df1 = DataFrame(g')
 rename!(df1, nm)
 df1[:, :digit] = map(i -> "$i", 0:9)
 df1
-df_new = df1[:, [5,1,3,4,2]]
+df_new = df1[:, [6,2,4,5,3,1]]
 rename!(df_new, vcat("digit", model_names))
 
 avg = map(x -> typeof(x) == Array{Float64,1} ? mean(x) : "Average", eachcol(df_new))
@@ -48,11 +48,11 @@ push!(df_new, avg)
 using PrettyTables
 
 l_max = LatexHighlighter(
-    (data, i, j) -> (data[i,j] == maximum(df_new[i, 2:5])) && typeof(data[i,j])!==String,
+    (data, i, j) -> (data[i,j] == maximum(df_new[i, 2:6])) && typeof(data[i,j])!==String,
     ["textbf", "textcolor{blue}"]
 )
 l_min = LatexHighlighter(
-    (data, i, j) -> (data[i,j] == minimum(df_new[i, 2:5])) && typeof(data[i,j])!==String,
+    (data, i, j) -> (data[i,j] == minimum(df_new[i, 2:6])) && typeof(data[i,j])!==String,
     ["textcolor{red}"]
 )
 

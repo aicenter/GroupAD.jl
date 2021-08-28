@@ -16,7 +16,7 @@ include(scriptsdir("evaluation", "MIL", "workflow.jl"))
 #####################
 ### leave-one-out ###
 #####################
-mnist_results_out = Dict()
+#mnist_results_out = Dict()
 mnist_results_out = load(datadir("dataframes", "mnist_results_out.bson"))
 
 modelname = "knn_basic"

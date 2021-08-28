@@ -25,6 +25,7 @@ modelname = "knn_basic"
 modelname = "vae_basic"
 modelname = "vae_instance"
 modelname = "statistician"
+modelname = "PoolModel"
 method = "leave-one-in"
 class = 10
 folder = datadir("experiments", "contamination-0.0", modelname, "MNIST", method, "class_index=$class")
@@ -41,15 +42,15 @@ push!(mnist_results_in, modelname => rdf)
 save(datadir("dataframes", "mnist_results_in.bson"), mnist_results_in)
 
 # add :model columns
-modelnames = ["knn_basic", "vae_basic", "vae_instance", "statistician"]
-model_names = ["kNNagg", "VAEagg", "VAE", "NS"]
-knn_basic, vae_basic, vae_instance, statistician = map(m-> insertcols!(mnist_results_in[m], :model => m), modelnames)
+modelnames = ["knn_basic", "vae_basic", "vae_instance", "statistician", "PoolModel"]
+model_names = ["kNNagg", "VAEagg", "VAE", "NS", "PoolModel"]
+knn_basic, vae_basic, vae_instance, statistician, poolmodel = map(m-> insertcols!(mnist_results_in[m], :model => m), modelnames)
 
-df_all = vcat(knn_basic, vae_basic, vae_instance, statistician, cols=:union)
+df_all = vcat(knn_basic, vae_basic, vae_instance, statistician, poolmodel, cols=:union)
 df_red = df_all[:, [:model, :class, :test_AUC_mean]]
 #sort!(df_red, [:class, :model])
 groupnames, M, labels = groupedbar_matrix(df_red, group=:class, cols=:model, value=:test_AUC_mean)
-idx = [1,3,4,2]
+idx = [2,4,5,3,1]
 vcat(hcat(labels[idx]...), hcat(model_names...))
 
 mnist_barplots(
@@ -78,6 +79,7 @@ modelname = "knn_basic"
 modelname = "vae_basic"
 modelname = "vae_instance"
 modelname = "statistician"
+modelname = "PoolModel"
 method = "leave-one-in"
 class = 10
 folder = datadir("experiments", "contamination-0.0", modelname, "MNIST", method, "class_index=$class")
@@ -85,7 +87,7 @@ folder = datadir("experiments", "contamination-0.0", modelname, "MNIST", method,
 results = DataFrame[]
 for class in 1:10
     folder = datadir("experiments", "contamination-0.0", modelname, "MNIST", method, "class_index=$class")
-    df = find_best_model(folder, :type)
+    df = find_best_model(folder, :poolf)
     #df = find_best_model(folder) |> DataFrame
     push!(results, df)
 end
@@ -161,5 +163,23 @@ vcat(hcat(labels[idx]...), new_labels)
 mnist_barplots(
     gdf, "statistician-in", new_labels; ind = idx, 
     group=:class, cols=:type, value=:test_AUC_mean,
+    w1=0.8, w2=0.85
+)
+
+# PoolModel
+modelname = "PoolModel"
+poolmodel = mnist_results_in_scores[modelname]
+g = groupby(sort(poolmodel, :val_AUC_mean, rev=true), [:class,:poolf])
+gm = map(x -> DataFrame(x[1,:]), g)
+gdf = vcat(gm...)
+groupnames, M, labels = groupedbar_matrix(gdf, group=:class, cols=:poolf, value=:test_AUC_mean)
+hcat(groupnames...)
+
+new_labels = ["maximum" "mean" "meanmax" "meanmax + card" "sumstat" "sumstat + card"]
+vcat(labels, new_labels)
+
+mnist_barplots(
+    gdf, "poolmodel-in", new_labels; legend_title="Pool function",
+    group=:class, cols=:poolf, value=:test_AUC_mean,
     w1=0.8, w2=0.85
 )
