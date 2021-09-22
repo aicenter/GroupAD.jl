@@ -94,24 +94,27 @@ modelname = "statistician"
 modelname = "PoolModel"
 method = "leave-one-in"
 #collect_mnist_models(modelname, method)
-models = load(datadir("results", "MNIST", method, "models", "$(modelname).bson"))
+models = load(datadir("results", "MNIST", method, "$(modelname).bson"))
 
-for class in 1:10
-    # load data
-    data = GroupAD.load_data("MNIST", method=method, anomaly_class_ind=class)
-    test_x, _ = unpack_mill(data[3])
+for modelname in ["vae_instance", "statistician", "PoolModel"]
+    models = load(datadir("results", "MNIST", method, "$(modelname).bson"))
+    for class in 1:10
+        # load data
+        data = GroupAD.load_data("MNIST", method=method, anomaly_class_ind=class)
+        test_x, _ = unpack_mill(data[3])
 
-    # load model
-    model = models[Symbol(class)]
+        # load model
+        model = models[Symbol(class)]
 
-    # plot row of normal and anomalous digits and their reconstruction
-    p = plot_na(test_x, model; an_color=2, k=5, layout=(1,2))
-    wsave(
-        plotsdir(
-            "MNIST_reconstruction",
-            method, modelname,
-            "reconstruction_class=$(class-1).png"
-        ), p)
+        # plot row of normal and anomalous digits and their reconstruction
+        p = plot_na(test_x, model; an_color=2, k=5, layout=(1,2))
+        wsave(
+            plotsdir(
+                "MNIST_reconstruction",
+                method, modelname,
+                "reconstruction_class=$(class-1).png"
+            ), p)
+    end
 end
 
 ###############################################
@@ -119,29 +122,37 @@ end
 ###############################################
 
 modelname = "vae_instance"
+modelname = "statistician"
+modelname = "PoolModel"
 method = "leave-one-out"
 #collect_mnist_models(modelname, method)
-vae_models_out = load(datadir("results", "MNIST", method, "models", "$(modelname).bson"))
+#models = load(datadir("results", "MNIST", method, "models", "$(modelname).bson"))
 
-for class in 1:10
-    # load data
-    data = GroupAD.load_data("MNIST", method=method, anomaly_class_ind=class)
-    test_x, _ = unpack_mill(data[3])
+for modelname in ["vae_instance", "PoolModel"]
+    models = load(datadir("results", "MNIST", method, "$(modelname).bson"))
+    for class in 1:10
+        # load data
+        data = GroupAD.load_data("MNIST", method=method, anomaly_class_ind=class)
+        test_x, _ = unpack_mill(data[3])
 
-    # load model
-    model = vae_models_out[Symbol(class)]
+        # load model
+        model = models[Symbol(class)]
 
-    # plot row of normal and anomalous digits and their reconstruction
-    p = plot_na(test_x, model; an_color=2, k=5, layout=(1,2))
-    wsave(
-        plotsdir(
-            "MNIST_reconstruction",
-            method, modelname,
-            "reconstruction_class=$(class-1).png"
-        ), p)
+        # plot row of normal and anomalous digits and their reconstruction
+        p = plot_na(test_x, model; an_color=2, k=5, layout=(1,2))
+        wsave(
+            plotsdir(
+                "MNIST_reconstruction",
+                method, modelname,
+                "reconstruction_class=$(class-1).png"
+            ), p)
+    end
 end
 
-# context
+###############
+### context ###
+###############
+
 class = 1
 data = GroupAD.load_mnist_point_cloud(;anomaly_class_ind=class)
 X = cat(data[:normal], data[:anomaly]);

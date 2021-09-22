@@ -11,7 +11,7 @@ using Plots
 using StatsPlots
 ENV["GKSwstype"] = "100"
 
-include(scriptsdir("evaluation", "MIL", "workflow.jl"))
+#include(scriptsdir("evaluation", "MIL", "workflow.jl"))
 
 ####################
 ### leave-one-in ###
@@ -26,6 +26,7 @@ modelname = "vae_basic"
 modelname = "vae_instance"
 modelname = "statistician"
 modelname = "PoolModel"
+modelname = "MGMM"
 method = "leave-one-in"
 class = 10
 folder = datadir("experiments", "contamination-0.0", modelname, "MNIST", method, "class_index=$class")
@@ -80,6 +81,7 @@ modelname = "vae_basic"
 modelname = "vae_instance"
 modelname = "statistician"
 modelname = "PoolModel"
+modelname = "MGMM"
 method = "leave-one-in"
 class = 10
 folder = datadir("experiments", "contamination-0.0", modelname, "MNIST", method, "class_index=$class")
@@ -181,5 +183,29 @@ vcat(labels, new_labels)
 mnist_barplots(
     gdf, "poolmodel-in", new_labels; legend_title="Pool function",
     group=:class, cols=:poolf, value=:test_AUC_mean,
+    w1=0.8, w2=0.85
+)
+
+### MGMM results
+mgmm = mnist_results_in["MGMM"]
+mgmm = mnist_results_in_scores["MGMM"]
+g = groupby(sort(mgmm, :val_AUC_mean, rev=true), [:class,:score])
+gm = map(x -> DataFrame(x[1,:]), g)
+gdf = vcat(gm...)
+groupnames, M, labels = groupedbar_matrix(gdf, group=:class, cols=:score, value=:test_AUC_mean)
+hcat(groupnames...)
+
+new_labels = ["point" "topic" "point + topic"]
+vcat(labels, new_labels)
+
+p = groupedbar(
+    map(i -> "$i", 0:9), M, label=new_labels, ylims=(0,1), legend=:bottomright,
+    xlabel="digit", ylabel="test AUC"
+)
+wsave(plotsdir("MNIST", "pdf", "MGMM-in.pdf"), p)
+
+mnist_barplots(
+    gdf, "MGMM-in", new_labels; legend_title="Score",
+    group=:class, cols=:score, value=:test_AUC_mean,
     w1=0.8, w2=0.85
 )
