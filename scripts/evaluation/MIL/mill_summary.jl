@@ -1,4 +1,4 @@
-using Latexify
+using PrettyTables
 
 """
 # MIL datasets summary table
@@ -39,5 +39,9 @@ for dataset in mill_datasets
 end
 
 T = vcat(t...)
-tex = latexify(T, env=:tabular, fmt=x->round(x, digits=1), booktabs=true)
+t = pretty_table(
+    T,
+    formatters = ft_printf("%5.1f"),
+    backend=:latex, tf=tf_latex_booktabs, nosubheader=true
+)
 

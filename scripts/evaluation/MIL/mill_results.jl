@@ -1,7 +1,7 @@
 using DrWatson
 @quickactivate
 using GroupAD
-using GroupAD: Evaluation
+using GroupAD.Evaluation
 using DataFrames
 using Statistics
 using EvalMetrics
@@ -11,7 +11,7 @@ using Plots
 using StatsPlots
 ENV["GKSwstype"] = "100"
 
-include(scriptsdir("evaluation", "MIL", "workflow.jl"))
+#include(scriptsdir("evaluation", "MIL", "workflow.jl"))
 
 mill_datasets = [
     "BrownCreeper", "CorelBeach", "CorelAfrican", "Elephant", "Fox", "Musk1", "Musk2",

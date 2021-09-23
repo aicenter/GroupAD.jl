@@ -192,8 +192,8 @@ Group key can be both a symbol or an array of symbols.
 """
 function find_best_model(folder::String; metric=:val_AUC, save_best_seed=false)
     #folder = datadir("experiments", "contamination-0.0", modelname, dataset)
-    data = GroupAD.Evaluation.results_dataframe(folder)
-    point = load(GroupAD.Evaluation.collect_scores(folder)[1])
+    data = results_dataframe(folder)
+    point = load(collect_scores(folder)[1])
     params = point[:parameters]
 
     g = groupby(data, [keys(params)...])
@@ -225,8 +225,8 @@ function find_best_model(folder::String; metric=:val_AUC, save_best_seed=false)
 end
 function find_best_model(folder, groupkey, metric=:val_AUC)
     #folder = datadir("experiments", "contamination-0.0", modelname, dataset, "scenario=$scenario")
-    data = GroupAD.Evaluation.results_dataframe(folder)
-    point = load(GroupAD.Evaluation.collect_scores(folder)[1])
+    data = results_dataframe(folder)
+    point = load(collect_scores(folder)[1])
     params = point[:parameters]
 
     g_score = groupby(data, groupkey)

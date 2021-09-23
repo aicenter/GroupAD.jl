@@ -3,7 +3,7 @@ using GroupAD: load_data
 using GroupAD.Models: unpack_mill
 using BSON
 using DataFrames
-using Latexify
+using PrettyTables
 using Mill
 
 dp = GroupAD.get_mnist_point_cloud_datapath()
@@ -43,4 +43,8 @@ mnist_summary = DataFrame(
 )
 sort!(mnist_summary, :class)
 
-tex = latexify(mnist_summary, env=:tabular, fmt=x->round(x, digits=1), booktabs=true)
+t = pretty_table(
+    mnist_summary,
+    formatters = ft_printf("%5.1f"),
+    backend=:latex, tf=tf_latex_booktabs, nosubheader=true
+)

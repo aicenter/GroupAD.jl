@@ -1,5 +1,5 @@
 """
-This script is very untidy and it could be optimized.
+This script is very untidy and could be optimized.
 """
 
 using DrWatson
@@ -11,9 +11,8 @@ using Statistics
 using EvalMetrics
 using BSON
 
-include(scriptsdir("evaluation", "MIL", "workflow.jl"))
-
 # load results dataframes
+modelnames = ["knn_basic", "vae_basic", "vae_instance", "statistician", "PoolModel", "MGMM"]
 mill_results_collection = load(datadir("results", "MIL", "mill_results_collection.bson"))
 knn_basic, vae_basic, vae_instance, statistician, poolmodel, mgmm = map(key -> mill_results_collection[key], modelnames)
 modelvec = [knn_basic, vae_basic, vae_instance, statistician, poolmodel, mgmm]
@@ -23,7 +22,6 @@ df = vcat(knn_basic, vae_basic, vae_instance, statistician, poolmodel, mgmm, col
 
 model_names = ["kNNagg", "VAEagg", "VAE", "NS", "PoolModel", "MGMM"]
 
-df_red = df[:, [:dataset, :model, :val_AUC_mean, :test_AUC_mean, :val_AUPRC_mean, :test_AUPRC_mean]]
 df_red = df[:, [:dataset, :model, :test_AUC_mean]]
 sort!(df_red, :dataset)
 

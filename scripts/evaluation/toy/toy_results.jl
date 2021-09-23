@@ -1,14 +1,13 @@
 using DrWatson
 @quickactivate
 using GroupAD
-using GroupAD: Evaluation
+using GroupAD.Evaluation
 using DataFrames
 using Statistics
 using EvalMetrics
 
 using Plots
 using StatsPlots
-#using PlotlyJS
 ENV["GKSwstype"] = "100"
 
 include(scriptsdir("evaluation", "workflow.jl"))
@@ -18,43 +17,6 @@ include(scriptsdir("evaluation", "toy", "workflow.jl"))
 modelnames = ["knn_basic", "vae_basic", "vae_instance", "statistician", "PoolModel", "MGMM"]
 modelscores = [:distance, :score, :type, :type, :type, :score]
 
-"""
-    groupedbar_matrix(df::DataFrame; group::Symbol, cols::Symbol, value::Symbol, groupnamefull=true)
-
-Create groupnames, matrix and labels for given dataframe.
-"""
-function groupedbar_matrix(df::DataFrame; group::Symbol, cols::Symbol, value::Symbol, groupnamefull=true)
-    gdf = groupby(df, group)
-    gdf_keys = keys(gdf)
-    gdf_name = String(group)
-    gdf_values = map(k -> values(k)[1], gdf_keys)
-    if groupnamefull
-        groupnames = map((name, value) -> "$name = $value", repeat([gdf_name], length(gdf_values)), gdf_values)
-    else
-        groupnames = map(value -> "$value", gdf_values)
-    end
-    colnames = gdf[1][:, cols]
-    M = hcat(map(x -> x[:, value], gdf)...)'
-
-    groupnames, M, String.(hcat(colnames...))
-end
-function groupedbar_matrix(df::DataFrame; group::Symbol, cols::Array{Symbol,1}, value::Symbol, groupnamefull=true)
-    gdf = groupby(df, group)
-    gdf_keys = keys(gdf)
-    gdf_name = String(group)
-    gdf_values = map(k -> values(k)[1], gdf_keys)
-    if groupnamefull
-        groupnames = map((name, value) -> "$name = $value", repeat([gdf_name], length(gdf_values)), gdf_values)
-    else
-        groupnames = map(value -> "$value", gdf_values)
-    end
-    _colnames = gdf[1][:, cols]
-    colnames = map((x, y) -> "$x & $y", _colnames[:, 1], _colnames[:, 2])
-    M = hcat(map(x -> x[:, value], gdf)...)'
-
-    groupnames, M, String.(hcat(colnames...))
-end
-
 # for one model
 dataset = "toy"
 modelname = modelnames[1]
@@ -63,6 +25,16 @@ modelname = modelnames[1]
 toy_results_collection = Dict()
 for (modelname, group) in map((x, y) -> (x, y), modelnames, modelscores)
     df = vcat(map(x -> find_best_model_scores(modelname, dataset, x; groupsymbol=group), 1:3)...)
+    push!(toy_results_collection, modelname => df)
+end
+for (modelname, group) in map((x, y) -> (x, y), modelnames, modelscores)
+    dfs = DataFrame[]
+    for scenario in 1:3
+        folder = datadir("experiments", "contamination-0.0", modelname, dataset, "scenario=$scenario")
+        df = find_best_model(folder, group)
+        push!(dfs, df)
+    end
+    vcat(dfs...)
     push!(toy_results_collection, modelname => df)
 end
 # save it
