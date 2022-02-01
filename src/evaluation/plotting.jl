@@ -1,3 +1,11 @@
+using StatsPlots
+
+mill_names = [
+    "BrownCreeper", "CorelAfrican", "CorelBeach", "Elephant", "Fox", "Musk1", "Musk2",
+    "Mut1", "Mut2", "News1", "News2", "News3", "Protein",
+    "Tiger", "UCSB-BC", "Web1", "Web2", "Web3", "Web4", "WinterWren"
+]
+
 """
     groupedbar_matrix(df::DataFrame; group::Symbol, cols::Symbol, value::Symbol, groupnamefull=true)
 

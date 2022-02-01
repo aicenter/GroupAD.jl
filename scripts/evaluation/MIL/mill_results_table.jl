@@ -11,6 +11,13 @@ using Statistics
 using EvalMetrics
 using BSON
 
+# Milldata sets names
+mill_datasets = [
+    "BrownCreeper", "CorelBeach", "CorelAfrican", "Elephant", "Fox", "Musk1", "Musk2",
+    "Mutagenesis1", "Mutagenesis2", "Newsgroups1", "Newsgroups2", "Newsgroups3", "Protein",
+    "Tiger", "UCSBBreastCancer", "Web1", "Web2", "Web3", "Web4", "WinterWren"
+]
+
 # load results dataframes
 modelnames = ["knn_basic", "vae_basic", "vae_instance", "statistician", "PoolModel", "MGMM"]
 mill_results_collection = load(datadir("results", "MIL", "mill_results_collection.bson"))

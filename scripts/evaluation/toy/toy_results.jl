@@ -43,8 +43,8 @@ toy_results_names_scores = Dict(map((x, y) -> x => y, modelnames, modelscores))
 safesave(datadir("dataframes", "toy_results_names_scores.bson"), toy_results_names_scores)
 
 # load results collection
-toy_results_collection = load(datadir("dataframes", "toy_results_collection.bson"))
-toy_results_names_scores = load(datadir("dataframes", "toy_results_names_scores.bson"))
+toy_results_collection = load(datadir("results/toy", "toy_results_collection.bson"))
+toy_results_names_scores = load(datadir("results/toy", "toy_results_names_scores.bson"))
 
 
 ### BARPLOTS

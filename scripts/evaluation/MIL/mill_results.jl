@@ -11,8 +11,7 @@ using Plots
 using StatsPlots
 ENV["GKSwstype"] = "100"
 
-#include(scriptsdir("evaluation", "MIL", "workflow.jl"))
-
+# names
 mill_datasets = [
     "BrownCreeper", "CorelBeach", "CorelAfrican", "Elephant", "Fox", "Musk1", "Musk2",
     "Mutagenesis1", "Mutagenesis2", "Newsgroups1", "Newsgroups2", "Newsgroups3", "Protein",
@@ -26,6 +25,10 @@ mill_names = [
 
 modelnames = ["knn_basic", "vae_basic", "vae_instance", "statistician", "PoolModel", "MGMM"]
 modelscores = [:distance, :score, :type, :type, :type, :score]
+
+#######################################
+### First time results calculations ###
+#######################################
 
 # MIL results - finding the best model
 # if calculated for the first time
@@ -58,10 +61,14 @@ for (modelname, score) in map((x, y) -> (x, y), modelnames, modelscores_agg)
 end
 save(datadir("dataframes", "mill_results_scores_agg.bson"), mill_results_scores_agg)
 
+#############################################
+### Load results from existing data files ###
+#############################################
 
 # if already calculated, just load the data
 mill_results_collection = load(datadir("results", "MIL", "mill_results_collection.bson"))
 mill_results_scores_agg = load(datadir("results", "MIL", "mill_results_scores_agg.bson"))
+mill_results_scores = load(datadir("results", "MIL", "mill_results_scores.bson"))
 
 
 ###################################################
