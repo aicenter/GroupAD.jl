@@ -19,17 +19,17 @@ s = ArgParseSettings()
         default = "toy"
         arg_type = String
         help = "dataset"
-	"type"
+	"scenario"
         default = 1
         arg_type = Int
-        help = "type of toy dataset"
+        help = "scenario of toy dataset"
    "contamination"
         default = 0.0
         arg_type = Float64
         help = "training data contamination rate"
 end
 parsed_args = parse_args(ARGS, s)
-@unpack dataset, max_seed, type, contamination = parsed_args
+@unpack dataset, max_seed, scenario, contamination = parsed_args
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
@@ -46,7 +46,7 @@ or equal to hidden dimension:
 - `zdim` <= `hdim`
 """
 function sample_params()
-	par_vec = (2 .^(1:5), 2 .^(1:4), 2 .^(1:4), 2 .^(1:4), ["scalar", "diagonal"], 10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"], 1:Int(1e8))
+	par_vec = (2 .^(2:4), [1,2,3], [1,2,3], [1,2,3], ["scalar", "diagonal"], 10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"], 1:Int(1e8))
 	argnames = (:hdim, :vdim, :cdim, :zdim, :var, :lr, :nlayers, :batchsize, :activation, :init_seed)
 	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
 
@@ -68,7 +68,7 @@ end
 
 Negative ELBO for training of a Neural Statistician model.
 """
-loss(model::GenerativeModels.NeuralStatistician,x) = -elbo1(model, x)
+loss(model::GenerativeModels.NeuralStatistician,x) = -GroupAD.Models.elbo1(model, x)
 
 (m::KLDivergence)(p::ConditionalDists.BMN, q::ConditionalDists.BMN) = IPMeasures._kld_gaussian(p,q)
 
@@ -86,8 +86,8 @@ function fit(data, parameters)
 
 	# fit train data
 	try
-		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=82800/max_seed, 
-			patience=10, check_interval=1, parameters...)
+		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=10*3600/max_seed, 
+			patience=200, check_interval=5, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
 		@info "Failed training due to \n$e"
@@ -121,8 +121,8 @@ end
 This modifies parameters according to data. Default version only returns the input arg. 
 Overload for models where this is needed.
 """
-function edit_params(data, parameters)
-	parameters
+function edit_params(data, parameters, scenario)
+	merge(parameters, (scenario = scenario, ))
 end
 
 ####################################################################
@@ -134,7 +134,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		fit, 
 		edit_params, 
 		max_seed, 
-		type, 
+		scenario, 
 		modelname, 
 		dataset,
 		datadir("experiments/contamination-$(contamination)")

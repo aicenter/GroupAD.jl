@@ -106,30 +106,32 @@ end
 Experimental loop for toy dataset.
 """
 function toy_experimental_loop(sample_params_f, fit_f, edit_params_f, 
-		max_seed, type, modelname, dataset, savepath)
+		max_seed, scenario, modelname, dataset, savepath)
 	# set a maximum for parameter sampling retries
 	# this is here because you might sample the same parameters of an already trained model
 	# in that case this loop runs again, for a total of 10 tries
+	@info "Inside loop."
 	try_counter = 0
 	max_tries = 10*max_seed
 	while try_counter < max_tries
 		# sample the random hyperparameters
 	    parameters = sample_params_f()
-
+		@info "Parameters sampled."
 	    # with these hyperparameters, train and evaluate the model on different train/val/tst splits
 	    for seed in 1:max_seed
 	    	# define where data is going to be saved
-			_savepath = joinpath(savepath, "$(modelname)/$(dataset)/seed=$(seed)")
+			_savepath = joinpath(savepath, "$(modelname)/$(dataset)/scenario=$(scenario)/seed=$(seed)")
 			mkpath(_savepath)
 
 			# get data
-			data = load_data(dataset, 120, 120; seed=seed, type=type)
+			data = load_data(dataset, 120, 120; seed=seed, scenario=scenario)
 			@info "Data created..."
 
 			# edit parameters
-			edited_parameters = edit_params_f(data, parameters)
+			edited_parameters = edit_params_f(data, parameters, scenario)
 
 			@info "Trying to fit $modelname on $dataset with parameters $(edited_parameters)..."
+			@info "Toy dataset scenario: $scenario."
 			@info "Train/validation/test splits: $(length(data[1][1])) | $(length(data[2][1])) | $(length(data[3][1]))"
 			@info "Number of features: $(size(data[1][1][1], 1))"
 
@@ -159,7 +161,7 @@ function toy_experimental_loop(sample_params_f, fit_f, edit_params_f,
 
 				# now loop over all anomaly score funs
 				@time for result in results
-					if modelname in ["vae_instance", "statistician"]
+					if modelname in ["vae_instance", "statistician", "PoolModel"]
 						experiment_bag(result..., data, _savepath; save_entries...)
 					else
 						experiment(result..., data, _savepath; save_entries...)

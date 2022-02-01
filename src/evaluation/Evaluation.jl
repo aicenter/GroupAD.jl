@@ -6,8 +6,11 @@ using Statistics
 using EvalMetrics
 using DataFrames
 
-include("utils.jl")
+export results_dataframe, find_best_model
+export mill_results
+export groupedbar_matrix, mill_barplots, mnist_barplots
 
-export results_dataframe
+include("utils.jl")
+include("plotting.jl")
 
 end # module

@@ -88,6 +88,7 @@ function experiment_likelihoods(score_fun, parameters, data, savepath; verb=true
 	_, safe_time = @timed score_fun.(train[1:idx])
 	length_all = length(train) + length(val) + length(test)
 	if safe_time * length_all / 100 > 3600
+		@info "Sampling would take too long, not calculating smapled likelihood."
 		return nothing
 	end
 

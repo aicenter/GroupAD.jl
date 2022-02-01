@@ -123,9 +123,9 @@ function pm_constructor(;idim, hdim, predim, postdim, edim, activation="swish", 
     return pm
 end
 
-#################
-### Functions ###
-#################
+#################################
+### Special pooling functions ###
+#################################
 
 bag_mean(x) = mean(x, dims=2)
 bag_maximum(x) = maximum(x, dims=2)
@@ -162,6 +162,9 @@ function sum_stat(x)
     m2 = maximum(x, dims=2)
     m3 = minimum(x, dims=2)
     m4 = var(x, dims=2)
+    if any(isnan.(m4))
+        m4 = zeros(length(m1))
+    end
     return vcat(m1,m2,m3,m4)
 end
 
@@ -170,6 +173,9 @@ function sum_stat_card(x)
     m2 = maximum(x, dims=2)
     m3 = minimum(x, dims=2)
     m4 = var(x, dims=2)
+    if any(isnan.(m4))
+        m4 = zeros(length(m1))
+    end
     return vcat(m1,m2,m3,m4,size(x,2))
 end
 
