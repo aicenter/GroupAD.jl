@@ -29,10 +29,61 @@ function experiment(score_fun, parameters, data, savepath; verb=true, save_resul
 		)
 	result = Dict{Symbol, Any}([sym=>val for (sym,val) in pairs(merge(result, save_entries))]) # this has to be a Dict 
 	if save_result
-		tagsave(savef, result, safe = true)
+		# tagsave(savef, result, safe = true)
+		safesave(savef, result)
 		verb ? (@info "Results saved to $savef") : nothing
 	end
 	result
+end
+
+"""
+	experiment_bagknn(score_fun, parameters, data, savepath; save_entries...)
+
+Eval score functions on test/val/train data for BagkNN model and save.
+"""
+function experiment_bagknn(score_fun, model, parameters, data, savepath; verb=true, save_result=true, save_entries...)
+	tr_data, val_data, tst_data = data
+
+	tr_dm, tr_dm_t, _, _, _ = @timed GroupAD.Models.distance_matrix(model, tr_data[1])
+	@show size(tr_dm)
+	val_dm, val_dm_t, _, _, _ = @timed GroupAD.Models.distance_matrix(model, val_data[1])
+	@show size(val_dm)
+	tst_dm, tst_dm_t, _, _, _ = @timed GroupAD.Models.distance_matrix(model, tst_data[1])
+	@show size(tst_dm)
+
+	inds = ["kappa", "gamma"]
+
+	# for scf in score_fun
+	for i in 1:2
+		# extract scores
+		tr_scores, tr_eval_t, _, _, _ = @timed score_fun[i](tr_dm)
+		@show length(tr_scores)
+		val_scores, val_eval_t, _, _, _ = @timed score_fun[i](val_dm)
+		@show length(val_scores)
+		tst_scores, tst_eval_t, _, _, _ = @timed score_fun[i](tst_dm)
+		@show length(tst_scores)
+
+		# now save the stuff
+		savef = joinpath(savepath, savename(merge(parameters, (score = inds[i], )), "bson", digits=5))
+		result = (
+			parameters = merge(parameters, (score = inds[i], )),
+			tr_scores = tr_scores,
+			tr_labels = tr_data[2], 
+			tr_eval_t = tr_eval_t + tr_dm_t,
+			val_scores = val_scores,
+			val_labels = val_data[2], 
+			val_eval_t = val_eval_t + val_dm_t,
+			tst_scores = tst_scores,
+			tst_labels = tst_data[2], 
+			tst_eval_t = tst_eval_t + tst_dm_t
+			)
+		result = Dict{Symbol, Any}([sym=>val for (sym,val) in pairs(merge(result, save_entries))]) # this has to be a Dict 
+		if save_result
+			# tagsave(savef, result, safe = true)
+			safesave(savef, result)
+			verb ? (@info "Results saved to $savef") : nothing
+		end
+	end
 end
 
 """
@@ -328,6 +379,10 @@ function basic_experimental_loop(sample_params_f, fit_f, edit_params_f,
 				@time for result in results
 					if modelname in ["vae_instance", "statistician", "PoolModel"]
 						experiment_bag(result..., data, _savepath; save_entries...)
+					elseif modelname == "SMM"
+						experiment(result..., GroupAD.Models.unpack_mill.(data), _savepath; save_entries...)
+					elseif modelname == "bag_knn"
+						experiment_bagknn(result..., GroupAD.Models.unpack_mill.(data), _savepath; save_entries...)
 					else # vae_basic, knn_basic
 						experiment(result..., data, _savepath; save_entries...)
 					end
