@@ -9,7 +9,8 @@ using Distances
 using Statistics
 using EvalMetrics
 
-data = load_data("BrownCreeper", seed=2053)
+seed = 2051
+data = load_data("Fox", seed=seed)
 
 train, val, test = data
 Xtrain, ytrain = unpack_mill(train)
@@ -36,13 +37,29 @@ binary_eval_report(ytest, dists)
 using Distances: UnionMetric
 import Distances: result_type
 
-peuclidean(X, Y) = mean(pairwise(Euclidean(), X,Y))
+peuclidean(X, Y) = median(pairwise(Euclidean(), X,Y))
 
 struct PEuclidean <: UnionMetric end
 (dist::PEuclidean)(x, y) = peuclidean(x, y)
 result_type(dist::PEuclidean, x, y) = Float32
 
 M = pairwise(PEuclidean(), Xtest, Xtrain)
+sort!(M, dims=2)
+# kappa
+dists = M[:, k]
+binary_eval_report(ytest, dists)
+# gamma
+dists = mean(M[:, 2:k], dims=2)[:]
+binary_eval_report(ytest, dists)
+
+### finding the best kernel width
+
+mg = pairwise(PEuclidean(), Xtrain)
+m = 1/median(mg)
+γ = rand(Uniform(0.5m, 1.5m))
+
+k = sample(1:3:51)
+M = pairwise(MMD(GaussianKernel(γ)), Xtest, Xtrain)
 sort!(M, dims=2)
 # kappa
 dists = M[:, k]

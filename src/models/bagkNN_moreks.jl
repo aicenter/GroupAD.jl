@@ -5,12 +5,10 @@ struct BagkNNModel
     distance::String
     kernel::String
     γ::Float32
-    k::Int
 end
 
 struct BagkNN
     distance
-    k::Int
     Xtrain
 end
 
@@ -38,7 +36,7 @@ function StatsBase.fit!(m::BagkNNModel, data::Tuple)
         distance = MMD(IMQKernel(m.γ))
     end
 
-    model = BagkNN(distance, m.k, Xtrain)
+    model = BagkNN(distance, Xtrain)
 end
 
 function distance_matrix(m::BagkNN, Xtest)
@@ -46,14 +44,14 @@ function distance_matrix(m::BagkNN, Xtest)
     sort!(M, dims=2)
 end
 
-function StatsBase.score(m::BagkNN, dm::AbstractMatrix, v::V) where {V<:Val{:kappa}}
-    return dm[:, m.k]
+function StatsBase.score(m::BagkNN, dm::AbstractMatrix, k::Int, v::V) where {V<:Val{:kappa}}
+    return dm[:, k+1]
 end
-function StatsBase.score(m::BagkNN, dm::AbstractMatrix, v::V) where {V<:Val{:gamma}}
-    return mean(dm[:, 1:m.k], dims=2)[:]
+function StatsBase.score(m::BagkNN, dm::AbstractMatrix, k::Int, v::V) where {V<:Val{:gamma}}
+    return mean(dm[:, 2:k+1], dims=2)[:]
 end
-StatsBase.score(m::BagkNN, dm::AbstractMatrix, v::Symbol) = StatsBase.score(m, dm, Val(v))
-StatsBase.score(m::BagkNN, dm::AbstractMatrix, v::String) = StatsBase.score(m, dm, Val(Symbol(v)))
+StatsBase.score(m::BagkNN, dm::AbstractMatrix, k::Int, v::Symbol) = StatsBase.score(m, dm, k, Val(v))
+StatsBase.score(m::BagkNN, dm::AbstractMatrix, k::Int, v::String) = StatsBase.score(m, dm, k, Val(Symbol(v)))
 
 # test it
 # m = BagkNNModel("MMD", "Gaussian", 0.1f0, 10)
@@ -62,13 +60,3 @@ StatsBase.score(m::BagkNN, dm::AbstractMatrix, v::String) = StatsBase.score(m, d
 
 # dm = distance_matrix(model, unpack_mill(data[2])[1])
 # score(model, dm, :gamma)
-
-# pairwise Euclidean distance
-using Distances: UnionMetric
-import Distances: result_type
-
-peuclidean(X, Y) = median(pairwise(Euclidean(), X,Y))
-
-struct PEuclidean <: UnionMetric end
-(dist::PEuclidean)(x, y) = peuclidean(x, y)
-result_type(dist::PEuclidean, x, y) = Float32

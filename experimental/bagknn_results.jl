@@ -59,33 +59,37 @@ function findmaxs(gdf::GroupedDataFrame, metric::Symbol)
     sort(df, :dataset)
 end
 
-
+# collects all results
 df = collect_results!(datadir("experiments", "contamination-0.0", "bag_knn"), subfolders=true)
-df_results = df[:, [:dataset, :parameters, :seed]]
+df = collect_results!(datadir("experiments", "contamination-0.0", "SMM"), subfolders=true)
 
+# calculate metrics
 metrics = []
 for row in eachrow(df)
     vauc, vaupr, tauc, taupr = compute_stats(row)
     push!(metrics, [vauc vaupr tauc taupr])
-    #if any([vauc, vaupr, tauc, taupr] .!= 0)
-    #    push!(metrics, [vauc vaupr tauc taupr])
-    #end
 end
 res = vcat(metrics...)
 
+# add metrics to a dataframe
 res_df = DataFrame(["val_AUC", "val_AUPRC", "test_AUC", "test_AUPRC"] .=> eachcol(res))
-df_results = hcat(df_results, res_df)
-# filtered_df = filter(["val_AUC", "val_AUPRC", "test_AUC", "test_AUPRC"] => (a,b,c,d) -> !(a == b == c == d == 0.0), df_results)
 
+# create results dataframe
+df_results = df[:, [:dataset, :parameters, :seed]]
+df_results = hcat(df_results, res_df)
+
+# groupby parameters and dataset to average over seeds
 g = groupby(df_results, [:parameters, :dataset])
 
 # filter out groups with < 5 seeds
 b = map(x -> nrow(x) >= 5, g)
-# b = map(i -> nrow(g[i]) >= 5, 1:length(g))
 g = g[b]
+
+# get mean values of metrics over seeds
 cdf = combine(g, ["val_AUC", "val_AUPRC", "test_AUC", "test_AUPRC"] .=> mean, renamecols=false)
 
+# groupby dataset
 g2 = groupby(cdf, :dataset)
+
+# create a pretty table
 pretty_table(findmaxs(g2, :val_AUC), nosubheader=true, crop=:none)
-
-

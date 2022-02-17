@@ -34,12 +34,13 @@ modelname = "SMM"
 function sample_params()
     distance = sample(["MMD", "Chamfer"])
     kernel = sample(["Gaussian", "IMQ"])
-    rand() > 0.5 ? γ = rand(Uniform(0,3)) : γ = rand(Uniform(3,100))
+    γ = rand()
     rand() > 0.5 ? h = rand(Uniform(0,3)) : h = rand(Uniform(3,100))
-    nu = sample(0.1:0.1:0.9)
+    nu = sample(0.2:0.1:0.9)
 
     if distance == "Chamfer"
         kernel = "none"
+        γ = 0f0
     end
     parameters = (
         distance = distance,
@@ -88,6 +89,16 @@ This modifies parameters according to data. Default version only returns the inp
 Overload for models where this is needed.
 """
 function edit_params(data, parameters)
+	Xtrain, _ = GroupAD.Models.unpack_mill(data[1])
+
+    # calculate ideal bandwidth
+    if parameters.distance == "MMD"
+        M = pairwise(GroupAD.Models.PEuclidean(), Xtrain)
+        m = 1/median(M)
+        γnew = sample(0.6m:0.1m:1.4m)
+        parameters = merge(parameters, (γ = γnew,))
+    end
+
 	parameters
 end
 

@@ -1,4 +1,5 @@
 Base.size(x::Mill.BagNode,args...) = size(x.data.data, args...)
+using EvalMetrics
 
 """
 	experiment(score_fun, parameters, data, savepath; save_entries...)
@@ -37,6 +38,70 @@ function experiment(score_fun, parameters, data, savepath; verb=true, save_resul
 end
 
 """
+	experiment_bagknn_moreks(score_fun, parameters, data, savepath; save_entries...)
+
+Eval score functions on test/val/train data for BagkNN model and save.
+"""
+function experiment_bagknn_moreks(score_fun, model, parameters, data, savepath; verb=true, save_result=true, save_entries...)
+	tr_data, val_data, tst_data = data
+
+	tr_dm, tr_dm_t, _, _, _ = @timed GroupAD.Models.distance_matrix(model, tr_data[1])
+	val_dm, val_dm_t, _, _, _ = @timed GroupAD.Models.distance_matrix(model, val_data[1])
+	tst_dm, tst_dm_t, _, _, _ = @timed GroupAD.Models.distance_matrix(model, tst_data[1])
+
+	inds = ["kappa", "gamma"]
+	k_max = minimum([100, size(tr_dm, 1)-1])
+
+	# for scf in score_fun
+	for i in 1:2
+
+		k_best = 1
+		auc_best = 0.0
+
+		for k in 1:k_max
+			val_scores, val_eval_t, _, _, _ = @timed score_fun[i](val_dm, k)
+			val_labels = val_data[2]
+
+			scores = vec(val_scores)
+			roc = EvalMetrics.roccurve(val_labels, scores)
+			auc = EvalMetrics.auc_trapezoidal(roc...)
+
+			if auc > auc_best
+				auc_best = auc
+				k_best = k
+			end
+		end
+
+		@info "Best score achieved for k=$k_best with AU-ROC=$auc_best."
+
+		# extract scores
+		tr_scores, tr_eval_t, _, _, _ = @timed score_fun[i](tr_dm, k_best)
+		val_scores, val_eval_t, _, _, _ = @timed score_fun[i](val_dm, k_best)
+		tst_scores, tst_eval_t, _, _, _ = @timed score_fun[i](tst_dm, k_best)
+
+		# now save the stuff
+		savef = joinpath(savepath, savename(merge(parameters, (score = inds[i], k = k_best,)), "bson", digits=5))
+		result = (
+			parameters = merge(parameters, (score = inds[i], k = k_best,)),
+			tr_scores = tr_scores,
+			tr_labels = tr_data[2], 
+			tr_eval_t = tr_eval_t + tr_dm_t,
+			val_scores = val_scores,
+			val_labels = val_data[2], 
+			val_eval_t = val_eval_t + val_dm_t,
+			tst_scores = tst_scores,
+			tst_labels = tst_data[2], 
+			tst_eval_t = tst_eval_t + tst_dm_t
+			)
+		result = Dict{Symbol, Any}([sym=>val for (sym,val) in pairs(merge(result, save_entries))]) # this has to be a Dict 
+		if save_result
+			# tagsave(savef, result, safe = true)
+			safesave(savef, result)
+			verb ? (@info "Results saved to $savef") : nothing
+		end
+	end
+end
+"""
 	experiment_bagknn(score_fun, parameters, data, savepath; save_entries...)
 
 Eval score functions on test/val/train data for BagkNN model and save.
@@ -45,11 +110,8 @@ function experiment_bagknn(score_fun, model, parameters, data, savepath; verb=tr
 	tr_data, val_data, tst_data = data
 
 	tr_dm, tr_dm_t, _, _, _ = @timed GroupAD.Models.distance_matrix(model, tr_data[1])
-	@show size(tr_dm)
 	val_dm, val_dm_t, _, _, _ = @timed GroupAD.Models.distance_matrix(model, val_data[1])
-	@show size(val_dm)
 	tst_dm, tst_dm_t, _, _, _ = @timed GroupAD.Models.distance_matrix(model, tst_data[1])
-	@show size(tst_dm)
 
 	inds = ["kappa", "gamma"]
 
@@ -57,11 +119,8 @@ function experiment_bagknn(score_fun, model, parameters, data, savepath; verb=tr
 	for i in 1:2
 		# extract scores
 		tr_scores, tr_eval_t, _, _, _ = @timed score_fun[i](tr_dm)
-		@show length(tr_scores)
 		val_scores, val_eval_t, _, _, _ = @timed score_fun[i](val_dm)
-		@show length(val_scores)
 		tst_scores, tst_eval_t, _, _, _ = @timed score_fun[i](tst_dm)
-		@show length(tst_scores)
 
 		# now save the stuff
 		savef = joinpath(savepath, savename(merge(parameters, (score = inds[i], )), "bson", digits=5))
@@ -345,7 +404,22 @@ function basic_experimental_loop(sample_params_f, fit_f, edit_params_f,
 			@info "Data loaded..."
 
 			# edit parameters
-			edited_parameters = edit_params_f(data, parameters)
+			if modelname in ["bag_knn","SMM" ]
+				if seed == 1
+					@info "Parameters edited."
+					@info "Previous parameters: $parameters."
+					parameters = edit_params_f(data, parameters)
+					edited_parameters = parameters
+					@info "New parameters: $parameters."
+				else
+					@info "No change in parameters for higher seed."
+					edited_parameters = parameters
+				end
+			else
+				@info "I should not be here."
+				edited_parameters = edit_params_f(data, parameters)
+			end
+
 
 			@info "Trying to fit $modelname on $dataset with parameters $(edited_parameters)..."
 			@info "Train/validation/test splits: $(size(data[1][1], 2)) | $(size(data[2][1], 2)) | $(size(data[3][1], 2))"

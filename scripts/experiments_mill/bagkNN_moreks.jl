@@ -34,18 +34,16 @@ modelname = "bag_knn"
 function sample_params()
     distance = sample(["MMD", "Chamfer"])
     kernel = sample(["Gaussian", "IMQ"])
-    γ = rand()
-    k = sample(1:3:51)
+    rand() > 0.5 ? γ = rand(Uniform(0,3)) : γ = rand(Uniform(3,100))
 
     if distance == "Chamfer"
         kernel = "none"
-        γ = 0f0
+        γ = 0
     end
     parameters = (
         distance = distance,
         kernel = kernel,
-        γ = Float32(γ),
-        k = k
+        γ = Float32(γ)
     )
     return parameters
 end
@@ -77,8 +75,8 @@ function fit(data, parameters)
 	return training_info, [
 		(
             [
-                dm -> GroupAD.Models.score(model, dm, "kappa"),
-                dm -> GroupAD.Models.score(model, dm, "gamma"),
+                (dm, k) -> GroupAD.Models.score(model, dm, k, "kappa"),
+                (dm, k) -> GroupAD.Models.score(model, dm, k, "gamma"),
             ],
             model,
             parameters,
@@ -88,28 +86,10 @@ end
 
 """
 	edit_params(data, parameters)
-
 This modifies parameters according to data. Default version only returns the input arg. 
 Overload for models where this is needed.
 """
 function edit_params(data, parameters)
-    Xtrain, _ = GroupAD.Models.unpack_mill(data[1])
-    
-    # ensure that k is smaller than number of train bags
-    kmax = length(Xtrain)
-    if parameters.k > kmax
-        knew = sample(1:3:kmax)
-        parameters = merge(parameters, (k=knew,))
-    end
-
-    # calculate ideal bandwidth
-    if parameters.distance == "MMD"
-        M = pairwise(GroupAD.Models.PEuclidean(), Xtrain)
-        m = 1/median(M)
-        γnew = sample(0.6m:0.1m:1.4m)
-        parameters = merge(parameters, (γ = γnew,))
-    end
-
 	parameters
 end
 
