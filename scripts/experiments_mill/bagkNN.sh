@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --time=4:00:00
-#SBATCH --partition=cpufast
+#SBATCH --time=24:00:00
+#SBATCH --partition=cpu
 #SBATCH --nodes=1 --ntasks-per-node=2 --cpus-per-task=1
-#SBATCH --mem=20G
+#SBATCH --mem=40G
 
 MAX_SEED=$1
 DATASET=$2

@@ -99,7 +99,8 @@ function StatsBase.score(m::SMM, Xtrain, Xtest)
     DM = pairwise(m.distance, Xtrain, Xtest)
     kernel = exp.(.- m.h .* DM)
     _, dec = svmpredict(m.model, kernel)
-    return dec[1,:]
+    # the decision boundary needs to be swapped
+    return .- dec[1,:]
 end
 function predictions(m::SMM, Xtrain, Xtest)
     DM = pairwise(m.distance, Xtrain, Xtest)

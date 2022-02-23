@@ -36,6 +36,6 @@ ml Python
 1. Install the package somewhere on the RCI cluster.
 2. Then the experiments can be run via `slurm`. This will run 20 experiments with the basic VAE model, each with 5 crossvalidation repetitions on all datasets in the text file with 10 parallel processes for each dataset.
 ```bash
-cd GroupAD.jl/scripts/experiments
+cd GroupAD.jl/scripts/experiments_mill
 ./run_parallel.sh vae_basic 20 5 10 datasets_mill.txt
 ```

@@ -38,9 +38,9 @@ function mmd_bandwidth(x)
     n = 5000
     if sz > n
         # calculate the bandwidth for the kernel
-        return bw = median(pairwise(Euclidean(), X[:,sample(1:sz,n)], dims=2))
+        return bw = 1/median(pairwise(Euclidean(), X[:,sample(1:sz,n)], dims=2))
     else
-        return bw = median(pairwise(Euclidean(), X, dims=2))
+        return bw = 1/median(pairwise(Euclidean(), X, dims=2))
     end
 end
 
