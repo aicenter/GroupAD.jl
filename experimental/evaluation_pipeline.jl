@@ -10,6 +10,9 @@ using LinearAlgebra
 using PrettyTables
 using Statistics
 
+# for generative models
+using DistributionsAD, GenerativeModels, Flux, GroupAD
+
 function compute_stats(row::DataFrameRow)
     if typeof(row[:tst_scores]) <: BitVector
         return (0.0,0.0,0.0,0.0)
@@ -30,12 +33,13 @@ function compute_stats(row::DataFrameRow)
 		prc = EvalMetrics.prcurve(labels, scores)
 		auprc = EvalMetrics.auc_trapezoidal(prc...)
 
-		t5 = EvalMetrics.threshold_at_fpr(labels, scores, 0.05)
-		cm5 = ConfusionMatrix(labels, scores, t5)
-		tpr5 = EvalMetrics.true_positive_rate(cm5)
-		f5 = EvalMetrics.f1_score(cm5)
+		#t5 = EvalMetrics.threshold_at_fpr(labels, scores, 0.05)
+		#cm5 = ConfusionMatrix(labels, scores, t5)
+		#tpr5 = EvalMetrics.true_positive_rate(cm5)
+		#f5 = EvalMetrics.f1_score(cm5)
 
-		push!(results, [auc, auprc, tpr5, f5])
+		#push!(results, [auc, auprc, tpr5, f5])
+        push!(results, [auc, auprc, 0, 0])
 	end
 
 	# DataFrame(measure = ["AUC", "AUPRC", "TPR@5", "F1@5"], validation = results[1], test = results[2])
@@ -45,6 +49,7 @@ end
 function findmaxs(gdf::GroupedDataFrame, metric::Symbol)
     res = []
     p_names = keys(gdf[1].parameters[1])
+
     for g in gdf
         vauc, ix = findmax(g[:, metric])
         tauc = g[ix, :test_AUC]
@@ -55,39 +60,37 @@ function findmaxs(gdf::GroupedDataFrame, metric::Symbol)
 
         push!(res, [g.dataset[1] values(g.parameters[ix])... round(vauc, digits=3) round(tauc, digits=3)])       
     end
-	if size(res, 2) != length([:dataset, p_names..., :val_AUC, :test_AUC])
+
+    # there is a problem with L parameters being and not being in the results files
+    if size(res, 2) != length([:dataset, p_names..., :val_AUC, :test_AUC])
 		pp = [:dataset, :zdim, :hdim, :var, :lr, :batchsize, :activation, :nlayers, :init_seed, :score, :type, :val_AUC, :test_AUC]
 		df = DataFrame(vcat(res...), pp)
 	else
     	df = DataFrame(vcat(res...), [:dataset, p_names..., :val_AUC, :test_AUC])
 	end
+
     sort(df, :dataset)
 end
 
-# collects all results
-df = collect_results!(datadir("experiments", "contamination-0.0", "bag_knn"), subfolders=true)
-df = collect_results!(datadir("experiments", "contamination-0.0", "SMM"), subfolders=true)
+df = collect_results(datadir("experiments", "contamination-0.0", "bag_knn"), subfolders=true)
+n = nrow(df)
 
-# collect_results for previously trained models (only results without models themselves)
-using DistributionsAD, GenerativeModels, Flux, GroupAD
-_df1 = collect_results(datadir("experiments", "contamination-0.0", "vae_instance", "BrownCreeper"), subfolders=true)
-_df2 = collect_results(datadir("experiments", "contamination-0.0", "vae_instance", "WinterWren"), subfolders=true)
-_df3 = collect_results(datadir("experiments", "contamination-0.0", "vae_instance", "CorelBeach"), subfolders=true)
-_df = vcat(_df1, _df2, _df3)
-df = filter(:dataset => x -> !ismissing(x), _df)
-# filter out seeds >5
-df = filter(:seed => x -> x <= 5, df)
+@time metrics1 = zeros(n, 4)
+@time metrics2 = zeros(n, 4)
 
-# calculate metrics
-metrics = []
-for row in eachrow(df)
-    vauc, vaupr, tauc, taupr = compute_stats(row)
-    push!(metrics, [vauc vaupr tauc taupr])
+r1 = @timed for i in 1:n
+    row = df[i,:]
+    metrics1[i, :] .= compute_stats(row)
 end
-res = vcat(metrics...)
+
+# this should be faster for larger dataframes
+r2 = @timed Threads.@threads for i in 1:n
+    row = @view df[i,:]
+    metrics2[i, :] .= compute_stats(row)
+end
 
 # add metrics to a dataframe
-res_df = DataFrame(["val_AUC", "val_AUPRC", "test_AUC", "test_AUPRC"] .=> eachcol(res))
+res_df = DataFrame(["val_AUC", "val_AUPRC", "test_AUC", "test_AUPRC"] .=> eachcol(metrics1))
 
 # create results dataframe
 df_results = df[:, [:dataset, :parameters, :seed]]
