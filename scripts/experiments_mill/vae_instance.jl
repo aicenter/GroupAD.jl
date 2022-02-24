@@ -108,13 +108,13 @@ function fit(data, parameters)
 	L=100
 	training_info, [
 		(x -> GroupAD.Models.likelihood(info.model,x), 
-			merge(parameters, (score = "reconstruction",))),
+			merge(parameters, (score = "reconstruction", L=1))),
 		(x -> GroupAD.Models.mean_likelihood(info.model,x), 
-			merge(parameters, (score = "reconstruction-mean",))),
+			merge(parameters, (score = "reconstruction-mean", L=1))),
 		(x -> GroupAD.Models.likelihood(info.model,x,L), 
 			merge(parameters, (score = "reconstruction-sampled", L=L))),
 		(x -> GroupAD.Models.reconstruct(info.model,x), 
-			merge(parameters, (score = "reconstructed_input",)))
+			merge(parameters, (score = "reconstructed_input", L=1)))
 	]
 end
 
