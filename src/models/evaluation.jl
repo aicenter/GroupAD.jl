@@ -1,5 +1,5 @@
 ### Provides evaluation functions which do not depend on the used model (VAE or Statistician)
-using IPMeasures
+using GroupAD.IPMeasures
 
 """
     calculate_logU(lh)
@@ -67,7 +67,7 @@ Corrected with the cardinality distribution.
 """
 function rec_score_from_likelihood(lh, sizes, pc::T) where T <: Distribution
     s = sum.(lh)
-    c = -logpdf(pc, sizes)
+    c = - logpdf.(pc, sizes)
     return s .+ c
 end
 
@@ -93,7 +93,7 @@ Corrected with both cardinality distribution and the logU constant.
 """
 function rec_score_from_likelihood(lh, sizes, pc::T, logU::AbstractFloat) where T <: Distribution
     s = sum.(lh)
-    c = -logpdf(pc, sizes)
+    c = - logpdf.(pc, sizes)
     nU = logU * sizes
     return s .+ c .- nU
 end

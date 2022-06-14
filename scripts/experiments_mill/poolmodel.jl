@@ -1,3 +1,5 @@
+using Pkg
+Pkg.activate(split(pwd(), ".jl")[1]*".jl")
 using DrWatson
 @quickactivate
 using ArgParse
@@ -6,7 +8,7 @@ import StatsBase: fit!, predict
 using StatsBase
 using BSON
 using Flux
-using GenerativeModels
+using GroupAD.GenerativeModels
 using Distributions
 using GroupAD.Models: mean_max, mean_max_card, sum_stat, sum_stat_card, bag_mean, bag_maximum
 
