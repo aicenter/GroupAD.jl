@@ -1,3 +1,5 @@
+using Pkg
+Pkg.activate(split(pwd(), ".jl")[1]*".jl")
 using DrWatson
 @quickactivate
 using ArgParse
@@ -6,7 +8,7 @@ import StatsBase: fit!, predict
 using StatsBase
 using BSON
 using Flux
-using GenerativeModels
+using GroupAD.GenerativeModels
 using Distributions
 
 s = ArgParseSettings()
@@ -65,8 +67,6 @@ end
 Negative ELBO for training of a Neural Statistician model.
 """
 loss(model::GenerativeModels.NeuralStatistician,x) = -GroupAD.Models.elbo1(model, x)
-
-(m::KLDivergence)(p::ConditionalDists.BMN, q::ConditionalDists.BMN) = IPMeasures._kld_gaussian(p,q)
 
 """
 	fit(data, parameters)
