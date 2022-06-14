@@ -1,7 +1,7 @@
 using Flux
 using ConditionalDists
-using GenerativeModels
-import GenerativeModels: VAE
+using GroupAD.GenerativeModels
+import  GroupAD.GenerativeModels: VAE
 using ValueHistories
 using MLDataPattern: RandomBatches
 using Distributions

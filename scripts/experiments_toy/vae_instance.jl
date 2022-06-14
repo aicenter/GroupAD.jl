@@ -1,3 +1,5 @@
+using Pkg
+Pkg.activate(split(pwd(), ".jl")[1]*".jl")
 using DrWatson
 @quickactivate
 using ArgParse
@@ -6,7 +8,7 @@ import StatsBase: fit!, predict
 using StatsBase
 using BSON
 using Flux
-using GenerativeModels
+using GroupAD.GenerativeModels
 using Distributions
 
 s = ArgParseSettings()
@@ -56,9 +58,9 @@ end
 
 Negative ELBO for training of a VAE model.
 """
-loss(model::GenerativeModels.VAE, x) = -elbo(model, x)
+loss(model::VAE, x) = -elbo(model, x)
 # version of loss for large datasets
-loss(model::GenerativeModels.VAE, x, batchsize::Int) = 
+loss(model::VAE, x, batchsize::Int) = 
 	mean(map(y->loss(model,y), Flux.Data.DataLoader(x, batchsize=batchsize)))
 
 """

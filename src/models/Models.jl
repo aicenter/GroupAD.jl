@@ -8,7 +8,7 @@ using Mill
 using Distributions
 using Distances: Euclidean, pairwise
 using Flux3D: chamfer_distance
-using IPMeasures: mmd, GaussianKernel, IMQKernel
+using GroupAD.IPMeasures: mmd, GaussianKernel, IMQKernel
 
 include("utils.jl")
 include("evaluation.jl")

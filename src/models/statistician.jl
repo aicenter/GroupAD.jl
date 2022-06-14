@@ -1,7 +1,7 @@
 using Flux
 using ConditionalDists
-using GenerativeModels
-import GenerativeModels: NeuralStatistician, elbo
+using GroupAD.GenerativeModels
+import GroupAD.GenerativeModels: NeuralStatistician, elbo
 using ValueHistories
 using MLDataPattern: RandomBatches
 using Distributions
