@@ -70,7 +70,7 @@ function basic_experimental_loop(sample_params_f, fit_f, edit_params_f,
 			# edit parameters
 			# bagkNN and SMM need to calculate parameter from the data
 			# the parameter needs to stay the same for all seeds
-			if modelname in ["bag_knn","SMM" ]
+			if modelname in ["bag_knn","SMM", "SMMC"]
 				if seed == 1
 					parameters = edit_params_f(data, parameters)
 					edited_parameters = parameters
@@ -115,7 +115,7 @@ function basic_experimental_loop(sample_params_f, fit_f, edit_params_f,
 				@time for result in results
 					if modelname in ["vae_instance", "statistician", "PoolModel"]
 						experiment_bag(result..., data, _savepath; save_entries...)
-					elseif modelname == "SMM"
+					elseif modelname in ["SMM", "SMMC"]
 						experiment(result..., GroupAD.Models.unpack_mill.(data), _savepath; save_entries...)
 					elseif modelname == "bag_knn"
 						experiment_bagknn(result..., GroupAD.Models.unpack_mill.(data), _savepath; save_entries...)

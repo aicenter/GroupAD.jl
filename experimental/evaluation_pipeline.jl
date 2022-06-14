@@ -46,11 +46,19 @@ function compute_stats(row::DataFrameRow)
     results[1][1:2]..., results[2][1:2]...
 end
 
+"""
+	findmaxs(gdf::GroupedDataFrame, metric::Symbol)
+
+Iterates over a grouped dataframe of results. Based on the chosen `metric`,
+chooses the best model (should be validation AUC or AUPRC).
+"""
 function findmaxs(gdf::GroupedDataFrame, metric::Symbol)
     res = []
+	# get parameter names for resulting dataframe
     p_names = keys(gdf[1].parameters[1])
 
     for g in gdf
+		# find the maximum value based on `metric`
         vauc, ix = findmax(g[:, metric])
         tauc = g[ix, :test_AUC]
 
@@ -61,36 +69,30 @@ function findmaxs(gdf::GroupedDataFrame, metric::Symbol)
         push!(res, [g.dataset[1] values(g.parameters[ix])... round(vauc, digits=3) round(tauc, digits=3)])       
     end
 
-    # there is a problem with L parameters being and not being in the results files
-    if size(res, 2) != length([:dataset, p_names..., :val_AUC, :test_AUC])
-		pp = [:dataset, :zdim, :hdim, :var, :lr, :batchsize, :activation, :nlayers, :init_seed, :score, :type, :val_AUC, :test_AUC]
-		df = DataFrame(vcat(res...), pp)
-	else
-    	df = DataFrame(vcat(res...), [:dataset, p_names..., :val_AUC, :test_AUC])
-	end
-
+	# create a resulting dataframe
+	df = DataFrame(vcat(res...), [:dataset, p_names..., :val_AUC, :test_AUC])
     sort(df, :dataset)
 end
 
-df = collect_results(datadir("experiments", "contamination-0.0", "bag_knn"), subfolders=true)
+model = "knn_basic"
+model = "SMM"
+model = "SMMC"
+model = "vae_basic"
+# load results collection
+_df = collect_results(datadir("experiments", "contamination-0.0", model, "MIL"), subfolders=true)
+# filter model files (for vae, statistician...)
+df = filter(:path => x -> !occursin("model", x), _df)
+
+# preallocate and calculate metrics
 n = nrow(df)
-
-@time metrics1 = zeros(n, 4)
-@time metrics2 = zeros(n, 4)
-
-r1 = @timed for i in 1:n
+metrics = zeros(n, 4)
+for i in 1:n
     row = df[i,:]
-    metrics1[i, :] .= compute_stats(row)
-end
-
-# this should be faster for larger dataframes
-r2 = @timed Threads.@threads for i in 1:n
-    row = @view df[i,:]
-    metrics2[i, :] .= compute_stats(row)
+    metrics[i, :] .= compute_stats(row)
 end
 
 # add metrics to a dataframe
-res_df = DataFrame(["val_AUC", "val_AUPRC", "test_AUC", "test_AUPRC"] .=> eachcol(metrics1))
+res_df = DataFrame(["val_AUC", "val_AUPRC", "test_AUC", "test_AUPRC"] .=> eachcol(metrics))
 
 # create results dataframe
 df_results = df[:, [:dataset, :parameters, :seed]]
@@ -99,15 +101,23 @@ df_results = hcat(df_results, res_df)
 # groupby parameters and dataset to average over seeds
 g = groupby(df_results, [:parameters, :dataset])
 
-# filter out groups with < 5 seeds
-b = map(x -> nrow(x) >= 5, g)
+# filter out groups with less than 10 seeds
+k = length(g)
+b = map(i -> nrow(g[i]) == 10, 1:k)
 g = g[b]
 
 # get mean values of metrics over seeds
 cdf = combine(g, ["val_AUC", "val_AUPRC", "test_AUC", "test_AUPRC"] .=> mean, renamecols=false)
 
-# groupby dataset
+# group by dataset
 g2 = groupby(cdf, :dataset)
+# find the best model based on metric (validation AUC)
+R = findmaxs(g2, :val_AUC)#[:, Not(:init_seed)]
+
+# reorder columns
+c = ncol(R)
+R2 = R[:, vcat([1,c-1,c], setdiff(1:c, [1,c,c-1]))]
 
 # create a pretty table
-pretty_table(findmaxs(g2, :val_AUC), nosubheader=true, crop=:none)
+pretty_table(R2, nosubheader=true, crop=:none)
+pretty_table(R2, nosubheader=true, backend=:text, tf = tf_markdown)

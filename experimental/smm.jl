@@ -1,7 +1,11 @@
 using DrWatson
 @quickactivate
 
-include("experimental/smm_src.jl")
+using GroupAD
+using GroupAD: load_data
+using GroupAD.Models: unpack_mill
+using GroupAD.Models: Chamfer, MMD
+# include("experimental/smm_src.jl")
 
 data = load_data("toy", 300, 300; scenario=2, seed=2053)
 data = load_data("BrownCreeper", seed=2053)
@@ -39,16 +43,15 @@ h = 1/median(M1)
 kernel_train = exp.(.- h .* M1 .^ 2)
 kernel_train = M1
 
+using LIBSVM
 model = svmtrain(kernel_train, kernel=Kernel.Precomputed; svmtype=OneClassSVM)
 
 # validation data
 M1val = pairwise(Chamfer(), Xtrain, Xval)
 kernel_val = exp.(.- h .* M1val)
 pred, dec = svmpredict(model, kernel_val)
-accuracy(yval, pred)
-accuracy(yval, .!pred)
 
-binary_eval_report(yval, dec[1,:])
+binary_eval_report(yval, .- dec[1,:])
 
 # test data
 M1test = pairwise(Chamfer(), Xtrain, Xtest)
