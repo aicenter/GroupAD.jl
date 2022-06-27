@@ -103,6 +103,7 @@ function point_cloud_experimental_loop_gpu(sample_params_f, fit_f, edit_params_f
 	max_seed::Vector{Int}, modelname, dataset, contamination, savepath, anomaly_classes::Vector{Int}, method)
 	# this function is modified version of point_cloud_experimental_loop
 	# max_seed and anomaly_classes is expected to be list of Ints.
+	# gpu in name of function means just there is not threding and fit! funciton can be gpu based
 
 	try_counter = 0
 	max_tries = 10*length(max_seed)
