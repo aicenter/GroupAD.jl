@@ -163,6 +163,7 @@ function point_cloud_experimental_loop_gpu(sample_params_f, fit_f, edit_params_f
 							experiment_bag(result..., data, _savepath; save_entries...)
 						else
 							experiment(result..., data, _savepath; save_entries...) # should work for setvae
+						end
 					end
 					try_counter = max_tries + 1
 				else
@@ -172,7 +173,7 @@ function point_cloud_experimental_loop_gpu(sample_params_f, fit_f, edit_params_f
 			end
 		end
 	end
-	(try_counter == max_tries) ? (@info "Reached $(max_tries) tries, giving up.") : nothing
+	return (try_counter == max_tries) ? (@info "Reached $(max_tries) tries, giving up.") : nothing
 end
 
 """

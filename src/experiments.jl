@@ -306,7 +306,7 @@ function basic_experimental_loop(sample_params_f, fit_f, edit_params_f,
 				training_info, results = fit_f(data, edited_parameters)
 
 				# save the model separately			
-				if training_info.model != nothing
+				if training_info.model !== nothing
 					modelf = joinpath(_savepath, savename("model", edited_parameters, "bson", digits=5))
 					tagsave(
 						modelf, 
