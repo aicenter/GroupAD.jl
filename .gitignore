@@ -12,6 +12,7 @@ _research
 log_files
 pbs_run
 .vscode
+scripts/test_setvae_fit.jl
 
 ################################################################################
 #                                    Julia                                     #
