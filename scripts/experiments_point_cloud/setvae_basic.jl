@@ -29,9 +29,9 @@ s = ArgParseSettings()
 	"anomaly_classes"
 		arg_type = Int
 		default = 10
-		help = "number of anomaly classes"
+		help = "number of anomaly classes, if =< 0 then considered as single anomaly class to train with"
 	"method"
-		default = "leave-one-out"
+		default = "leave-one-in"
 		arg_type = String
 		help = "method for data creation -> \"leave-one-out\" or \"leave-one-in\" "
    "contamination"
