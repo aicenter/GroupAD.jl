@@ -13,7 +13,7 @@ using Flux
 using Zygote
 using CUDA
 using GenerativeMIL: transform_batch
-using GenerativeMIL.Models: check, loss
+using GenerativeMIL.Models: check, loss, unpack_mill
 using MLDataPattern
 
 s = ArgParseSettings()
@@ -122,8 +122,8 @@ function fit(data, parameters)
 	# max. train time: 24 hours, over 10 CPU cores -> 2.4 hours of training for each model
 	# the full traning time should be 48 hours to ensure all scores are calculated
 	# training time is decreased automatically for less cores!
-	try
-		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=24*3600/length(max_seed)/lenght(anomaly_classes), 
+	try 
+		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=24*3600/length(max_seed)/length(anomaly_classes), 
 			patience=200, check_interval=20, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed

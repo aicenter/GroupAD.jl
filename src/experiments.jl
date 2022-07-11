@@ -231,6 +231,79 @@ function experiment_reconstructed_input(score_fun, parameters, data, savepath; v
 end
 
 """
+ - Special version of \"experiment_reconstructed_input\", where score function is not working via broadcasting \"f.()\" 
+ - only score computed in this function is Chamfer Distance (for now)
+"""
+function experiment_reconstructed_input_batched(score_fun, parameters, data, savepath; verb=true, save_result=true, save_entries...)
+
+	tr_data, val_data, tst_data = data
+	# unpack data for easier manipulation
+	tr_data, tr_lab = GroupAD.Models.unpack_mill(tr_data)
+	val_data, val_lab = GroupAD.Models.unpack_mill(val_data)
+	tst_data, tst_lab = GroupAD.Models.unpack_mill(tst_data)
+
+	# create reconstructed bags
+	tr_rec, tr_rec_t, _, _, _ = @timed score_fun(tr_data)
+	val_rec, val_rec_t, _, _, _ = @timed score_fun(val_data)
+	tst_rec, tst_rec_t, _, _, _ = @timed score_fun(tst_data)
+
+	"""
+	# safe reconstructed inputs
+	savef = joinpath(savepath, savename("reconstruction", parameters, "bson", digits=5))
+	result = (
+		parameters = parameters,
+		tr_rec = tr_rec,
+		tr_labels = tr_lab, 
+		val_rec = val_rec,
+		val_labels = val_lab, 
+		tst_rec = tst_rec,
+		tst_labels = tst_lab, 
+		tst_eval_t = tst_eval_t
+		)
+
+	result = Dict{Symbol, Any}([sym=>val for (sym,val) in pairs(merge(result, save_entries))]) # this has to be a Dict 
+	if save_result
+		tagsave(savef, result, safe = true)
+		verb ? (@info "Reconstruction saved to savef") : nothing
+	end
+	"""
+
+	score_names =["chamfer"]
+	scores = [
+		(x,y)->map((pt1,pt2)->Flux3D.chamfer_distance(pt1,pt2), x, y)
+	]
+
+	# calculate and save the scoresš 
+	for (i, final_score) in enumerate(scores)
+		tr_scores, tr_eval_t, _, _, _ = @timed final_score(tr_data, tr_rec)
+		val_scores, val_eval_t, _, _, _ = @timed final_score(val_data, val_rec)
+		tst_scores, tst_eval_t, _, _, _ = @timed final_score(tst_data, tst_rec)
+	
+
+		# now save the stuff
+		savef = joinpath(savepath, savename(merge(parameters, (type = score_names[i],)), "bson", digits=5))
+		result = (
+			parameters = merge(parameters, (type = score_names[i],)),
+			tr_scores = tr_scores,
+			tr_labels = tr_lab, 
+			tr_eval_t = tr_eval_t,
+			val_scores = val_scores,
+			val_labels = val_lab, 
+			val_eval_t = val_eval_t,
+			tst_scores = tst_scores,
+			tst_labels = tst_lab, 
+			tst_eval_t = tst_eval_t
+			)
+		result = Dict{Symbol, Any}([sym=>val for (sym,val) in pairs(merge(result, save_entries))]) # this has to be a Dict 
+		if save_result
+			tagsave(savef, result, safe = true)
+			verb ? (@info "Results saved to $savef") : nothing
+		end
+	end
+end
+
+
+"""
 	edit_params(data, parameters)
 This modifies parameters according to data. Default version only returns the input arg. 
 Overload for models where this is needed.

@@ -98,7 +98,7 @@ function point_cloud_experimental_loop(sample_params_f, fit_f, edit_params_f,
 	(try_counter == max_tries) ? (@info "Reached $(max_tries) tries, giving up.") : nothing
 end
 
-# TODO test this
+
 function point_cloud_experimental_loop_gpu(sample_params_f, fit_f, edit_params_f, 
 	max_seed::Vector{Int}, modelname, dataset, contamination, savepath, anomaly_classes::Vector{Int}, method)
 	# this function is modified version of point_cloud_experimental_loop
@@ -158,10 +158,11 @@ function point_cloud_experimental_loop_gpu(sample_params_f, fit_f, edit_params_f
 					save_entries = merge(training_info, (modelname = modelname, seed = seed, dataset = dataset))
 
 					# now loop over all anomaly score funs
-					# TODO test this / SetVae should go to experiment()
 					@time for result in results
 						if modelname in ["vae_instance", "statistician", "PoolModel"]
 							experiment_bag(result..., data, _savepath; save_entries...)
+						elseif modelname in ["setvae_basic"]
+							experiment_reconstructed_input_batched(result..., data, _savepath; save_entries...)
 						else
 							experiment(result..., data, _savepath; save_entries...) # should work for setvae
 						end

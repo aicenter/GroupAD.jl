@@ -11,6 +11,7 @@ using BSON
 using DataDeps
 using Mmap
 using Distributions
+using Flux3D
 # using PyCall
 
 export GenerativeModels
