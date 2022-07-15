@@ -1,9 +1,7 @@
 #!/bin/bash
 #SBATCH --time=24:00:00
 #SBATCH --nodes=1 --ntasks-per-node=1 --cpus-per-task=1
-#SBATCH --gres=gpu:1
-#SBATCH --partition=gpu
-#SBATCH --mem=30G
+#SBATCH --mem=1G
 
 MAX_SEED=$1  
 # seed, if seed =< 0 it is considered concrete single seed to train with
@@ -23,13 +21,20 @@ RANDOM_SEED=$RANDOM
 module load Julia/1.7.2-linux-x86_64
 julia --project -e 'using Pkg; Pkg.instantiate(); @info("Instantiated") '
 
+LOG_DIR="${HOME}/logs/SetVAE-parts"
+
+if [ ! -d "$LOG_DIR" ]; then
+	mkdir $LOG_DIR
+fi
 
 for((i=1; i<=$MAX_SEED; i++ ))
 do 
     for((j=1; j<=$ANOMALY_CLASSES; j++ ))
     do 
-        julia --project ./setvae_basic.jl -$i $DATASET -$j $METHOD $CONTAMINATION ${RANDOM_SEED}
+        sbatch \
+        --output="${LOG_DIR}/MNIST-${RANDOM_SEED}_${i}_${j}.out" \
+        ./setvae_basic.sh -$i ${DATASET} -$j ${METHOD} ${CONTAMINATION} ${RANDOM_SEED}
+        #julia --project ./setvae_basic.jl -$i $DATASET -$j $METHOD $CONTAMINATION ${RANDOM_SEED}
         # i/j is negative => special case in setvae_basic.jl => parallel training
     done
 done
-#julia --project ./setvae_basic.jl ${MAX_SEED} $DATASET ${ANOMALY_CLASSES} $METHOD $CONTAMINATION ${RANDOM_SEED}
