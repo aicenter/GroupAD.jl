@@ -88,7 +88,7 @@ function sample_params(seed=nothing)
 	training_par_vec = (
 		2 .^ (6:7), 		# :batchsize -> size of one training batch
 		10f0 .^(-4:-3),		# :lr -> learning rate
-		[false],			# :lr_decay -> boolean value if to use learning rate decay after half of epochs. 
+		[false],			# :lr_decay -> boolean value  or "WarmupCosine". 
 		10f0 .^ (-3:-1),	# :beta -> final β scaling factor for KL divergence
 		[0f0, 50f0], 		# :beta_anealing -> number of anealing epochs!!, if 0 then NO anealing
 		[400], 				# :epochs -> n of iid iterations (depends on bs and datasize) proportional to n of :epochs 
@@ -147,7 +147,7 @@ function fit(data, parameters)
 	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
 	return training_info, [
 		(x -> GenerativeMIL.Models.transform_and_reconstruct(info.model, x, const_module=Base), 
-		merge(parameters, (score = "reconstructed_input",)))
+		merge(parameters, (score = "input",)))
 	]
 	#((x, x_mask) -> GenerativeMIL.Models.reconstruct(info.model, x, x_mask), merge(parameters, (score = "reconstructed_input",)))
 end
@@ -174,7 +174,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		modelname, 
 		dataset, 
 		contamination, 
-		datadir("experiments/contamination-$(contamination)"),
+		datadir("experiments/c-$(contamination)"),
 		anomaly_classes,
         method
 		)

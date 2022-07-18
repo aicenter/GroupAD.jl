@@ -120,9 +120,9 @@ function point_cloud_experimental_loop_gpu(sample_params_f, fit_f, edit_params_f
 				else
 					error("This model can only run on point cloud datasets!")
 				end
-
+				method_dict = Dict("leave-one-in"=> "loi", "leave-one-out"=> "loo")
 				# define where data is going to be saved
-				_savepath = joinpath(savepath, "$(modelname)/$(dataset)/$(method)/class_index=$(class)/seed=$(seed)")
+				_savepath = joinpath(savepath, "$(modelname)/$(dataset)/$(method_dict[method])/class_index=$(class)/seed=$(seed)")
 				mkpath(_savepath)
 
 				#edit params
