@@ -1,5 +1,3 @@
-using Pkg
-Pkg.activate(split(pwd(), ".jl")[1]*".jl")
 using DrWatson
 @quickactivate
 using ArgParse
@@ -99,9 +97,9 @@ function fit(data, parameters)
 	batchsize=512
 	training_info, [
 		(x -> GroupAD.Models.reconstruction_score(info.model,x,agf), 
-			merge(parameters, (score = "reconstruction",))),
+			merge(parameters, (score = "reconstruction", L=1))),
 		(x -> GroupAD.Models.reconstruction_score_mean(info.model,x,agf), 
-			merge(parameters, (score = "reconstruction-mean",))),
+			merge(parameters, (score = "reconstruction-mean", L=1))),
 		(x -> GroupAD.Models.reconstruction_score(info.model,x,agf,L), 
 			merge(parameters, (score = "reconstruction-sampled", L=L)))		
 	]
@@ -136,6 +134,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		modelname, 
 		dataset, 
 		contamination, 
-		datadir("experiments/contamination-$(contamination)")
+		datadir("experiments/contamination-$(contamination)/MIL")
 		)
 end

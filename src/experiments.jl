@@ -1,4 +1,9 @@
+#################################################################################
+### Functions to calculate results and scores after models have been trained. ###
+#################################################################################
+
 Base.size(x::Mill.BagNode,args...) = size(x.data.data, args...)
+using EvalMetrics
 
 """
 	experiment(score_fun, parameters, data, savepath; save_entries...)
@@ -29,18 +34,63 @@ function experiment(score_fun, parameters, data, savepath; verb=true, save_resul
 		)
 	result = Dict{Symbol, Any}([sym=>val for (sym,val) in pairs(merge(result, save_entries))]) # this has to be a Dict 
 	if save_result
-		tagsave(savef, result, safe = true)
+		# tagsave(savef, result, safe = true)
+		safesave(savef, result)
 		verb ? (@info "Results saved to $savef") : nothing
 	end
 	result
 end
 
 """
+	experiment_bagknn(score_fun, parameters, data, savepath; save_entries...)
+
+Eval score functions on test/val/train data for BagkNN model and save.
+"""
+function experiment_bagknn(score_fun, model, parameters, data, savepath; verb=true, save_result=true, save_entries...)
+	tr_data, val_data, tst_data = data
+
+	tr_dm, tr_dm_t, _, _, _ = @timed GroupAD.Models.distance_matrix(model, tr_data[1])
+	val_dm, val_dm_t, _, _, _ = @timed GroupAD.Models.distance_matrix(model, val_data[1])
+	tst_dm, tst_dm_t, _, _, _ = @timed GroupAD.Models.distance_matrix(model, tst_data[1])
+
+	inds = ["kappa", "gamma"]
+
+	# for scf in score_fun
+	for i in 1:2
+		# extract scores
+		tr_scores, tr_eval_t, _, _, _ = @timed score_fun[i](tr_dm)
+		val_scores, val_eval_t, _, _, _ = @timed score_fun[i](val_dm)
+		tst_scores, tst_eval_t, _, _, _ = @timed score_fun[i](tst_dm)
+
+		# now save the stuff
+		savef = joinpath(savepath, savename(merge(parameters, (score = inds[i], )), "bson", digits=5))
+		result = (
+			parameters = merge(parameters, (score = inds[i], )),
+			tr_scores = tr_scores,
+			tr_labels = tr_data[2], 
+			tr_eval_t = tr_eval_t + tr_dm_t,
+			val_scores = val_scores,
+			val_labels = val_data[2], 
+			val_eval_t = val_eval_t + val_dm_t,
+			tst_scores = tst_scores,
+			tst_labels = tst_data[2], 
+			tst_eval_t = tst_eval_t + tst_dm_t
+			)
+		result = Dict{Symbol, Any}([sym=>val for (sym,val) in pairs(merge(result, save_entries))]) # this has to be a Dict 
+		if save_result
+			# tagsave(savef, result, safe = true)
+			safesave(savef, result)
+			verb ? (@info "Results saved to $savef") : nothing
+		end
+	end
+end
+
+"""
 	experiment_bag(score_fun, parameters, data, savepath; verb=true, save_result=true, save_entries...)
 
-Bag data and models are evaluated differently from instance models such as VAE acting on aggregated bags.
+Bag data and models arle evaluated differently from instance models such as VAE acting on aggregated bags.
 If model is either NeuralStatistician or VAE instance, the score functions are merged such that computation
-of certain scores is only done once (such as calculating the instance likelihoods).
+of certain scores is only done once (such as calcuating the instance likelihoods).
 """
 function experiment_bag(score_fun, parameters, data, savepath; verb=true, save_result=true, save_entries...)
 	# calculate the scores from likelihoods
@@ -88,7 +138,7 @@ function experiment_likelihoods(score_fun, parameters, data, savepath; verb=true
 	_, safe_time = @timed score_fun.(train[1:idx])
 	length_all = length(train) + length(val) + length(test)
 	if safe_time * length_all / 100 > 3600
-		@info "Sampling would take too long, not calculating smapled likelihood."
+		@info "Sampling would take too long, not calculating sampled likelihood."
 		return nothing
 	end
 
@@ -228,116 +278,4 @@ function experiment_reconstructed_input(score_fun, parameters, data, savepath; v
 			verb ? (@info "Results saved to $savef") : nothing
 		end
 	end
-end
-
-"""
-	edit_params(data, parameters)
-This modifies parameters according to data. Default version only returns the input arg. 
-Overload for models where this is needed.
-"""
-function edit_params(data, parameters)
-	parameters
-end
-
-"""
-	check_params(savepath, parameters)
-
-Returns `true` if the model with given parameters wasn't already trained and saved. 
-"""
-function check_params(savepath, parameters)
-	if ~isdir(savepath)
-		return true
-	end
-	# filter out duplicates created by tagsave
-	fs = filter(x->!(occursin("_#", x)), readdir(savepath))
-	# filter out model files
-	fs = filter(x->!(startswith(x, "model")), fs)
-	# if the first argument name contains a "_", than the savename is parsed wrongly
-	saved_params = map(x -> DrWatson.parse_savename("_"*x)[2], fs)
-	# now filter out saved models where parameter names are different or missing
-	pkeys = collect(keys(parameters))
-	filter!(ps->intersect(pkeys, Symbol.(collect(keys(ps))))==pkeys, saved_params)
-	for params in saved_params
-		all(map(k->params[String(k)] == parameters[k], pkeys)) ? (return false) : nothing
-	end
-	true
-end
-
-"""
-	basic_experimental_loop(sample_params_f, fit_f, edit_params_f, 
-		max_seed, modelname, dataset, contamination, savepath)
-
-This function takes a function that samples parameters, a fit function and a function that edits the sampled
-parameters and other parameters. Then it loads data, samples hyperparameters, calls the fit function
-that is supposed to construct and fit a model and finally evaluates the returned score functions on 
-the loaded data.
-"""
-function basic_experimental_loop(sample_params_f, fit_f, edit_params_f, 
-		max_seed, modelname, dataset, contamination, savepath)
-	# set a maximum for parameter sampling retries
-	# this is here because you might sample the same parameters of an already trained model
-	# in that case this loop runs again, for a total of 10 tries
-	try_counter = 0
-	max_tries = 10*max_seed
-	while try_counter < max_tries
-		# sample the random hyperparameters
-	    parameters = sample_params_f()
-
-	    # with these hyperparameters, train and evaluate the model on different train/val/tst splits
-	    for seed in 1:max_seed
-	    	# define where data is going to be saved
-			_savepath = joinpath(savepath, "$(modelname)/$(dataset)/seed=$(seed)")
-			mkpath(_savepath)
-
-			# get data
-			@time data = load_data(dataset, seed=seed, contamination=contamination)
-			@info "Data loaded..."
-
-			# edit parameters
-			edited_parameters = edit_params_f(data, parameters)
-
-			@info "Trying to fit $modelname on $dataset with parameters $(edited_parameters)..."
-			@info "Train/validation/test splits: $(size(data[1][1], 2)) | $(size(data[2][1], 2)) | $(size(data[3][1], 2))"
-			@info "Number of features: $(size(data[1][1], 1))"
-
-			# check if a combination of parameters and seed alread exists
-			if check_params(_savepath, edited_parameters)
-				# fit
-				training_info, results = fit_f(data, edited_parameters)
-
-				# save the model separately			
-				if training_info.model != nothing
-					modelf = joinpath(_savepath, savename("model", edited_parameters, "bson", digits=5))
-					tagsave(
-						modelf, 
-						Dict("model"=>training_info.model,
-							"fit_t"=>training_info.fit_t,
-							"history"=>training_info.history,
-							"parameters"=>edited_parameters
-							), 
-						safe = true)
-					(@info "Model saved to $modelf")
-
-					training_info = merge(training_info, (model = nothing,history=nothing))
-				end
-
-				# here define what additional info should be saved together with parameters, scores, labels and predict times
-				save_entries = merge(training_info, (modelname = modelname, seed = seed, dataset = dataset))
-
-				# now loop over all anomaly score funs
-				@time for result in results
-					if modelname in ["vae_instance", "statistician", "PoolModel"]
-						experiment_bag(result..., data, _savepath; save_entries...)
-					else # vae_basic, knn_basic
-						experiment(result..., data, _savepath; save_entries...)
-					end
-				end
-				try_counter = max_tries + 1
-			else
-				@info "Model already present, trying new hyperparameters..."
-				try_counter += 1
-			end
-		end
-	end
-	(try_counter == max_tries) ? (@info "Reached $(max_tries) tries, giving up.") : nothing
 end

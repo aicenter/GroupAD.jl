@@ -6,7 +6,7 @@ import StatsBase: fit!, predict
 using StatsBase
 using BSON
 using Flux
-using GroupAD.GenerativeModels
+using Statistics
 using Distributions
 
 s = ArgParseSettings()
@@ -29,42 +29,26 @@ parsed_args = parse_args(ARGS, s)
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
-modelname = "statistician"
-# sample parameters, should return a Dict of model kwargs 
-"""
-	sample_params()
-
-Should return a named tuple that contains a sample of model parameters.
-For NeuralStatistician, latent dimensions cdim and zdim should be smaller
-or equal to hidden dimension:
-- `cdim` <= `hdim`
-- `vdim` <= `hdim`
-- `zdim` <= `hdim`
-"""
+modelname = "bag_knn"
+# sample parameters, should return a Dict of model kwargs
 function sample_params()
-	par_vec = (2 .^(4:9), 2 .^(3:8), 2 .^(3:8), 2 .^(3:8), ["scalar", "diagonal"], 10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"], 1:Int(1e8))
-	argnames = (:hdim, :vdim, :cdim, :zdim, :var, :lr, :nlayers, :batchsize, :activation, :init_seed)
-	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
-	
-	# ensure that vdim, zdim, cdim <= hdim
-	while parameters.vdim >= parameters.hdim
-		parameters = merge(parameters, (vdim = sample(par_vec[2]),))
-	end
-	while parameters.cdim >= parameters.hdim
-		parameters = merge(parameters, (cdim = sample(par_vec[3]),))
-	end
-	while parameters.zdim >= parameters.hdim
-		parameters = merge(parameters, (zdim = sample(par_vec[4]),))
-	end
-	return parameters
+    distance = sample(["MMD", "Chamfer"])
+    kernel = sample(["Gaussian", "IMQ"])
+    γ = rand()
+    k = sample(1:3:51)
+
+    if distance == "Chamfer"
+        kernel = "none"
+        γ = 0f0
+    end
+    parameters = (
+        distance = distance,
+        kernel = kernel,
+        γ = Float32(γ),
+        k = k
+    )
+    return parameters
 end
-
-"""
-	loss(model::GenerativeModels.NeuralStatistician, x)
-
-Negative ELBO for training of a Neural Statistician model.
-"""
-loss(model::GenerativeModels.NeuralStatistician, batch) = mean(x -> -GroupAD.Models.elbo1(model, x), batch)
 
 """
 	fit(data, parameters)
@@ -76,46 +60,56 @@ Final parameters is a named tuple of names and parameter values that are used fo
 """
 function fit(data, parameters)
 	# construct model - constructor should only accept kwargs
-	model = GroupAD.Models.statistician_constructor(;idim=size(data[1][1],1), parameters...)
+	model = GroupAD.Models.BagkNNModel(parameters...)
 
-	# fit train data
-	try
-		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=82800/max_seed, 
-			patience=200, check_interval=5, parameters...)
-	catch e
-		# return an empty array if fit fails so nothing is computed
-		@info "Failed training due to \n$e"
-		return (fit_t = NaN, history=nothing, npars=nothing, model=nothing), [] 
-	end
+	# create model with train data
+	model, fit_t, _, _, _ = @timed StatsBase.fit!(model, data)
+    @info "Model created."
 
 	# construct return information - put e.g. the model structure here for generative models
 	training_info = (
 		fit_t = fit_t,
-		history = info.history,
-		npars = info.npars,
-		model = info.model
+		model = nothing,
+        history=  nothing
 		)
 
 	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
-	L=100
 	return training_info, [
-		(x -> GroupAD.Models.likelihood(info.model,x), 
-			merge(parameters, (score = "reconstruction", L=1))),
-		(x -> GroupAD.Models.mean_likelihood(info.model,x), 
-			merge(parameters, (score = "reconstruction-mean", L=1))),
-		(x -> GroupAD.Models.likelihood(info.model,x,L), 
-			merge(parameters, (score = "reconstruction-sampled", L=L))),
-		(x -> GroupAD.Models.reconstruct_input(info.model, x),
-			merge(parameters, (score = "reconstructed_input", L=1)))
+		(
+            [
+                dm -> GroupAD.Models.score(model, dm, "kappa"),
+                dm -> GroupAD.Models.score(model, dm, "gamma"),
+            ],
+            model,
+            parameters,
+        ),
 	]
 end
 
 """
 	edit_params(data, parameters)
+
 This modifies parameters according to data. Default version only returns the input arg. 
 Overload for models where this is needed.
 """
 function edit_params(data, parameters)
+    Xtrain, _ = GroupAD.Models.unpack_mill(data[1])
+    
+    # ensure that k is smaller than number of train bags
+    kmax = length(Xtrain)
+    if parameters.k > kmax
+        knew = sample(1:3:kmax)
+        parameters = merge(parameters, (k=knew,))
+    end
+
+    # calculate ideal bandwidth
+    if parameters.distance == "MMD"
+        M = pairwise(GroupAD.Models.PEuclidean(), Xtrain)
+        m = 1/median(M)
+        γnew = sample(0.6m:0.1m:1.4m)
+        parameters = merge(parameters, (γ = γnew,))
+    end
+
 	parameters
 end
 

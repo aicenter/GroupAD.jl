@@ -1,0 +1,17 @@
+ BrownCreeper
+ CorelAfrican
+ CorelBeach
+ Elephant
+ Fox
+ Musk1
+ Musk2
+ Mutagenesis1
+ Mutagenesis2
+ Newsgroups1
+ Newsgroups2
+ Newsgroups3
+ Protein
+ Tiger
+ UCSBBreastCancer
+ WinterWren
+ 
