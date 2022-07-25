@@ -9,6 +9,6 @@ DATASET=$2
 CONTAMINATION=$3
 
 # module load Julia
-module load Julia/1.6.4-linux-x86_64
+module load Julia/1.7.3-linux-x86_64
 
-julia ./bagkNN.jl ${MAX_SEED} $DATASET $CONTAMINATION
+julia --project ./bagkNN.jl ${MAX_SEED} $DATASET $CONTAMINATION

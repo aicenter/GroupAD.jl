@@ -5,9 +5,8 @@ using GroupAD
 import StatsBase: fit!, predict
 using StatsBase
 using BSON
-using Flux
-using Statistics
 using Distributions
+using Distances
 
 s = ArgParseSettings()
 @add_arg_table! s begin
@@ -29,25 +28,20 @@ parsed_args = parse_args(ARGS, s)
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
-modelname = "bag_knn"
-# sample parameters, should return a Dict of model kwargs
-function sample_params()
-    distance = sample(["MMD", "Chamfer"])
-    kernel = sample(["Gaussian", "IMQ"])
-    γ = rand()
-    k = sample(1:3:51)
+modelname = "SMM"
+# sample parameters, should return a Dict of model kwargs 
+"""
+	sample_params()
 
-    if distance == "Chamfer"
-        kernel = "none"
-        γ = 0f0
-    end
-    parameters = (
-        distance = distance,
-        kernel = kernel,
-        γ = Float32(γ),
-        k = k
-    )
-    return parameters
+Should return a named tuple that contains a sample of model parameters.
+"""
+function sample_params()
+	nu = sample(0.1f0:0.1f0:0.9f0)
+	rand() > 0.5 ? h = rand(Uniform(0,3)) : h = rand(Uniform(3,30))
+	parameters = (
+		γ = Float32(h), nu = nu,
+	)
+	return parameters
 end
 
 """
@@ -60,11 +54,12 @@ Final parameters is a named tuple of names and parameter values that are used fo
 """
 function fit(data, parameters)
 	# construct model - constructor should only accept kwargs
-	model = GroupAD.Models.BagkNNModel(parameters...)
-
-	# create model with train data
-	model, fit_t, _, _, _ = @timed StatsBase.fit!(model, data)
+	model = GroupAD.Models.SMM(;parameters...)
     @info "Model created."
+
+	# fit train data
+	model, fit_t, _, _, _ = @timed StatsBase.fit!(model, data)
+    @info "Model fitted."
 
 	# construct return information - put e.g. the model structure here for generative models
 	training_info = (
@@ -73,44 +68,20 @@ function fit(data, parameters)
         history=  nothing
 		)
 
+    train_data, _ = GroupAD.Models.unpack_mill(data[1])
 	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
 	return training_info, [
-		(
-            [
-                dm -> GroupAD.Models.score(model, dm, "kappa"),
-                dm -> GroupAD.Models.score(model, dm, "gamma"),
-            ],
-            model,
-            parameters,
-        ),
+		(x -> GroupAD.Models.score(model, train_data, x), merge(parameters, (score = "score", ))),
 	]
 end
 
 """
 	edit_params(data, parameters)
-
 This modifies parameters according to data. Default version only returns the input arg. 
 Overload for models where this is needed.
 """
 function edit_params(data, parameters)
-    Xtrain, _ = GroupAD.Models.unpack_mill(data[1])
-    
-    # ensure that k is smaller than number of train bags
-    kmax = length(Xtrain)
-    if parameters.k > kmax
-        knew = sample(1:3:kmax)
-        parameters = merge(parameters, (k=knew,))
-    end
-
-    # calculate ideal bandwidth
-    if parameters.distance == "MMD"
-        M = pairwise(GroupAD.Models.PEuclidean(), Xtrain)
-        m = 1/median(M)
-        γnew = sample(0.6m:0.1m:1.4m)
-        parameters = merge(parameters, (γ = γnew,))
-    end
-
-	parameters
+    parameters
 end
 
 ####################################################################

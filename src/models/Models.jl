@@ -18,8 +18,9 @@ include("vae.jl")
 include("statistician.jl")
 include("MGMM.jl")
 include("PoolModel.jl")
-include("SMM.jl")
-include("SMMC.jl")
+# include("SMM.jl")
+include("SMM_empirical.jl")
+# include("SMMC.jl")
 include("bagkNN.jl")
 
 end # module

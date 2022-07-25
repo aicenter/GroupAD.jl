@@ -60,11 +60,11 @@ function basic_experimental_loop(sample_params_f, fit_f, edit_params_f,
 	    # with these hyperparameters, train and evaluate the model on different train/val/tst splits
 	    for seed in 1:max_seed
 	    	# define where data is going to be saved
-			_savepath = joinpath(savepath, "$(modelname)/MIL/$(dataset)/seed=$(seed)")
+			_savepath = joinpath(savepath, "$(modelname)/$(dataset)/seed=$(seed)")
 			mkpath(_savepath)
 
 			# get data
-			@time data = load_data(dataset, seed=seed, contamination=contamination)
+			@time data = GroupAD.load_data(dataset, seed=seed, contamination=contamination)
 			@info "Data loaded..."
 
 			# edit parameters

@@ -1,5 +1,3 @@
-using Pkg
-Pkg.activate(split(pwd(), ".jl")[1]*".jl")
 using DrWatson
 @quickactivate
 using ArgParse
@@ -66,7 +64,7 @@ end
 
 Negative ELBO for training of a Neural Statistician model.
 """
-loss(model::GenerativeModels.NeuralStatistician,x) = -GroupAD.Models.elbo1(model, x)
+loss(model::GenerativeModels.NeuralStatistician, batch) = mean(x -> -GroupAD.Models.elbo1(model, x), batch)
 
 """
 	fit(data, parameters)
@@ -133,6 +131,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		modelname, 
 		dataset, 
 		contamination, 
-		datadir("experiments/contamination-$(contamination)")
+		datadir("experiments/contamination-$(contamination)/MIL")
 		)
 end

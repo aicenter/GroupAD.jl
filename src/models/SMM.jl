@@ -1,5 +1,5 @@
 using LIBSVM
-using IPMeasures
+using GroupAD.IPMeasures
 using Flux3D: chamfer_distance
 using Statistics
 using Distributions
@@ -9,7 +9,7 @@ using Distributions
 using Distances
 using Distances: UnionMetric
 import Distances: result_type
-using IPMeasures: pairwisel2, AbstractKernel
+using GroupAD.IPMeasures: pairwisel2, AbstractKernel
 
 struct Chamfer <: UnionMetric end
 (dist::Chamfer)(x, y) = chamfer_distance(x, y)

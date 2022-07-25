@@ -160,15 +160,15 @@ function StatsBase.fit!(model::NeuralStatistician, data::Tuple, loss::Function;
 		"""
 		# classic training
 		bag_batch = RandomBagBatches(tr_x,batchsize=batchsize,randomize=true)
-		Flux.train!(lossf, ps, bag_batch, opt)
+		Flux.train!(lossf, ps, [bag_batch], opt)
 		# only batch training loss
-		batch_loss = mean(lossf.(bag_batch))
+		batch_loss = lossf(bag_batch) # mean(lossf.(bag_batch))
 
     	push!(history, :training_loss, i, batch_loss)
 		if mod(i, check_interval) == 0
 			
 			# validation/early stopping
-			val_loss = mean(lossf.(val_x))
+			val_loss = lossf(bag_batch) # mean(lossf.(val_x))
 			
 			@info "$i - loss: $(batch_loss) (batch) | $(val_loss) (validation)"
 

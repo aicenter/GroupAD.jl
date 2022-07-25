@@ -1,5 +1,5 @@
 using StatsBase
-using IPMeasures
+using GroupAD.IPMeasures
 
 struct BagkNNModel
     distance::String

@@ -1,5 +1,5 @@
 using LIBSVM
-using IPMeasures
+using GroupAD.IPMeasures
 using Flux3D: chamfer_distance
 using Statistics
 using Distributions

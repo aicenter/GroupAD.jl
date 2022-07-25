@@ -11,7 +11,8 @@ using PrettyTables
 using Statistics
 
 # for generative models
-using DistributionsAD, GenerativeModels, Flux, GroupAD
+using DistributionsAD, Flux, GroupAD
+using GroupAD.GenerativeModels
 
 """
     compute_stats(row::DataFrameRow)
@@ -29,11 +30,11 @@ function compute_stats(row::DataFrameRow)
 	results = []
 	for (scores, labels) in scores_labels
 		if all(isnan.(scores))
-			@info "score is NaN"
+			# @info "score is NaN"
 			# return (NaN, NaN, NaN, NaN)
             return (0.0,0.0,0.0,0.0)
 		end
-		scores = vec(scores)
+		scores = vec(scores) .|> Float32
 		roc = EvalMetrics.roccurve(labels, scores)
 		auc = EvalMetrics.auc_trapezoidal(roc...)
 		prc = EvalMetrics.prcurve(labels, scores)
@@ -83,11 +84,6 @@ function findmaxs(gdf::GroupedDataFrame, metric::Symbol)
     sort(df, :dataset)
 end
 
-mill_datasets = [
-    "BrownCreeper", "CorelBeach", "CorelAfrican", "Elephant", "Fox", "Musk1", "Musk2",
-    "Mutagenesis1", "Mutagenesis2", "Newsgroups1", "Newsgroups2", "Newsgroups3", "Protein",
-    "Tiger", "UCSBBreastCancer", "Web1", "Web2", "Web3", "Web4", "WinterWren"
-]
 mill_datasets_wo_Web = [
     "BrownCreeper", "CorelBeach", "CorelAfrican", "Elephant", "Fox", "Musk1", "Musk2",
     "Mutagenesis1", "Mutagenesis2", "Newsgroups1", "Newsgroups2", "Newsgroups3", "Protein",
@@ -95,9 +91,12 @@ mill_datasets_wo_Web = [
 ]
 
 function collect_mill(model::String, mill_datasets=mill_datasets)
-    dfs = repeat([DataFrame()], 20)
-    Threads.@threads for i in 1:20
-        _df = collect_results(datadir("experiments", "contamination-0.0", model, "MIL", mill_datasets[i]), subfolders=true)
+    len = length(mill_datasets)
+    dfs = repeat([DataFrame()], len)
+    Threads.@threads for i in 1:len
+        # _df = collect_results(datadir("experiments", "contamination-0.0", model, "MIL", mill_datasets[i]), subfolders=true)
+        # _df = collect_results(datadir("experiments", "contamination-0.0_old_data", model, mill_datasets[i]), subfolders=true)
+        _df = collect_results(datadir("experiments", "contamination-0.0", "MIL", model, mill_datasets[i]), subfolders=true)
         dfs[i] = _df
     end
     return vcat(dfs...)
@@ -117,6 +116,7 @@ function mill_model_results(model::String; metric::Symbol=:val_AUC, show=false, 
     # load results collection
     #_df = collect_results(datadir("experiments", "contamination-0.0", model, "MIL"), subfolders=true)
     _df = collect_mill(model)
+    @info "Data loaded."
     # filter model files (for vae, statistician...)
     df = filter(:path => x -> !occursin("model", x), _df)
     if !isnothing(filter_fun)
@@ -178,6 +178,7 @@ function mill_collect(model::String; metric::Symbol=:val_AUC, show=false, tf=tf_
     # load results collection
     #_df = collect_results(datadir("experiments", "contamination-0.0", model, "MIL"), subfolders=true)
     _df = collect_mill(model)
+    @info "Data loaded."
     # filter model files (for vae, statistician...)
     df = filter(:path => x -> !occursin("model", x), _df)
     if !isnothing(filter_fun)

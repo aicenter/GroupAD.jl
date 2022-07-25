@@ -1,5 +1,3 @@
-using Pkg
-Pkg.activate(split(pwd(), ".jl")[1]*".jl")
 using DrWatson
 @quickactivate
 using ArgParse
@@ -105,6 +103,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		modelname, 
 		dataset, 
 		contamination, 
-		datadir("experiments/contamination-$(contamination)")
+		datadir("experiments/contamination-$(contamination)/MIL")
 		)
 end

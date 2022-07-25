@@ -93,7 +93,7 @@ end
 	StatsBase.fit!(model::VAE, data::Tuple, loss::Function; max_train_time=82800, lr=0.001, 
 		batchsize=64, patience=30, check_interval::Int=10, kwargs...)
 """
-function StatsBase.fit!(model::VAE, data::Tuple, loss::Function; max_iters=10000, max_train_time=82800, 
+function StatsBase.fit!(model::VAE, data::Tuple, loss::Function; max_iters=100000, max_train_time=82800, 
 	lr=0.001, batchsize=64, patience=30, check_interval::Int=10, kwargs...)
 	history = MVHistory()
 	opt = ADAM(lr)

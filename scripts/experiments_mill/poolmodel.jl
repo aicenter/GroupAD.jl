@@ -1,5 +1,3 @@
-using Pkg
-Pkg.activate(split(pwd(), ".jl")[1]*".jl")
 using DrWatson
 @quickactivate
 using ArgParse
@@ -71,11 +69,11 @@ function sample_params()
 end
 
 """
-    loss(model::GroupAD.Models.PoolModel,x)
+    loss(model::GroupAD.Models.PoolModel, batch)
 
-Loss for PoolModel.
+Loss for PoolModel calculated as a mean over the whole minibatch.
 """
-loss(model::GroupAD.Models.PoolModel,x) = GroupAD.Models.pm_loss(model, x)
+loss(model::GroupAD.Models.PoolModel, batch) = mean(x -> GroupAD.Models.pm_loss(model, x), batch)
 
 """
 	fit(data, parameters)
@@ -135,6 +133,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		modelname, 
 		dataset, 
 		contamination, 
-		datadir("experiments/contamination-$(contamination)")
+		datadir("experiments/contamination-$(contamination)/MIL")
 		)
 end

@@ -8,6 +8,6 @@ MAX_SEED=$1
 DATASET=$2
 CONTAMINATION=$3
 
-module load Julia/1.7.2-linux-x86_64
+module load Julia/1.7.3-linux-x86_64
 
-julia ./MGMM.jl ${MAX_SEED} $DATASET $CONTAMINATION
+julia --project ./MGMM.jl ${MAX_SEED} $DATASET $CONTAMINATION

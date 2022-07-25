@@ -6,7 +6,6 @@ import StatsBase: fit!, predict
 using StatsBase
 using BSON
 using Flux
-using GenerativeModels
 using Distributions
 
 s = ArgParseSettings()
@@ -114,6 +113,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		modelname, 
 		dataset, 
 		contamination, 
-		datadir("experiments/contamination-$(contamination)")
+		datadir("experiments/contamination-$(contamination)/MIL")
 		)
 end
