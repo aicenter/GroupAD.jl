@@ -1,5 +1,3 @@
-using Pkg
-Pkg.activate(split(pwd(), ".jl")[1]*".jl")
 using DrWatson
 @quickactivate
 using ArgParse

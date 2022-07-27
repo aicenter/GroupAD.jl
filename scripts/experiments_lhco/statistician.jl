@@ -7,6 +7,7 @@ using StatsBase
 using BSON
 using Flux
 using GroupAD.GenerativeModels
+using Distributions
 
 s = ArgParseSettings()
 @add_arg_table! s begin
@@ -15,7 +16,7 @@ s = ArgParseSettings()
         help = "seed"
         default = 1
     "dataset"
-        default = "events_anomalydetection_v2.h5"
+    default = "events_anomalydetection_v2.h5"
         arg_type = String
         help = "dataset"
    "contamination"
@@ -28,40 +29,39 @@ parsed_args = parse_args(ARGS, s)
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
-modelname = "vae_basic"
-
-function mean_min_max_c(x; dims)
-	m1 = mean(x; dims=dims)
-	m2 = minimum(x; dims=dims)
-	m3 = maximum(x; dims=dims)
-	m4 = median(x; dims=dims)
-	c = size(x, 2)
-	return vcat(m1, m2, m3, m4, c)
-end
-
+modelname = "statistician"
 # sample parameters, should return a Dict of model kwargs 
 """
 	sample_params()
 
 Should return a named tuple that contains a sample of model parameters.
+For NeuralStatistician, latent dimensions cdim and zdim should be smaller
+or equal to hidden dimension:
+- `cdim` <= `hdim`
+- `vdim` <= `hdim`
+- `zdim` <= `hdim`
 """
 function sample_params()
-	par_vec = ([1,2,3], 2 .^(4:9), ["scalar", "diagonal"], 10f0 .^(-4:-3), 2 .^ (5:7), ["relu", "swish", "tanh"], 3:4, 1:Int(1e8),
-		["mean", "maximum", "median", "mean_min_max_c"])
-	argnames = (:zdim, :hdim, :var, :lr, :batchsize, :activation, :nlayers, :init_seed, :aggregation)
+	par_vec = (2 .^(4:9), 2 .^(3:8), 2 .^(3:8), [1,2,3], ["scalar", "diagonal"], 10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"], 1:Int(1e8))
+	argnames = (:hdim, :vdim, :cdim, :zdim, :var, :lr, :nlayers, :batchsize, :activation, :init_seed)
 	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
+	
+	# ensure that vdim, zdim, cdim <= hdim
+	while parameters.vdim >= parameters.hdim
+		parameters = merge(parameters, (vdim = sample(par_vec[2]),))
+	end
+	while parameters.cdim >= parameters.hdim
+		parameters = merge(parameters, (cdim = sample(par_vec[3]),))
+	end
 	return parameters
 end
 
 """
-	loss(model::GenerativeModels.VAE, x[, batchsize])
+	loss(model::GenerativeModels.NeuralStatistician, x)
 
-Negative ELBO for training of a VAE model.
+Negative ELBO for training of a Neural Statistician model.
 """
-loss(model::GenerativeModels.VAE, x) = -elbo(model, x)
-# version of loss for large datasets
-loss(model::GenerativeModels.VAE, x, batchsize::Int) = 
-	mean(map(y->loss(model,y), Flux.Data.DataLoader(x, batchsize=batchsize)))
+loss(model::GenerativeModels.NeuralStatistician, batch) = mean(x -> -GroupAD.Models.elbo1(model, x), batch)
 
 """
 	fit(data, parameters)
@@ -72,20 +72,13 @@ Each element of the return vector contains a specific anomaly score function - t
 Final parameters is a named tuple of names and parameter values that are used for creation of the savefile name.
 """
 function fit(data, parameters)
-
-	# aggregate bags into vectors
-	# first convert the aggregation string to a function
-	# agf = getfield(StatsBase, Symbol(parameters.aggregation))
-	agf = eval(Symbol(parameters.aggregation))
-	data = GroupAD.Models.aggregate(data, agf)
-
 	# construct model - constructor should only accept kwargs
-	model = GroupAD.Models.vae_constructor(;idim=size(data[1][1],1), parameters...)
+	model = GroupAD.Models.statistician_constructor(;idim=size(data[1][1],1), parameters...)
 
 	# fit train data
 	try
 		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=60*60*23/max_seed, 
-			patience=200, check_interval=10, parameters...)
+			patience=200, check_interval=5, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
 		@info "Failed training due to \n$e"
@@ -100,25 +93,25 @@ function fit(data, parameters)
 		model = info.model
 		)
 
-	# now return the infor to be saved and an array of tuples (anomaly score function, hyperparatemers)
+	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
 	L=100
-	batchsize=512
-	training_info, [
-		(x -> GroupAD.Models.reconstruction_score(info.model,x,agf), 
+	return training_info, [
+		(x -> GroupAD.Models.likelihood(info.model,x), 
 			merge(parameters, (score = "reconstruction", L=1))),
-		(x -> GroupAD.Models.reconstruction_score_mean(info.model,x,agf), 
+		(x -> GroupAD.Models.mean_likelihood(info.model,x), 
 			merge(parameters, (score = "reconstruction-mean", L=1))),
-		(x -> GroupAD.Models.reconstruction_score(info.model,x,agf,L), 
-			merge(parameters, (score = "reconstruction-sampled", L=L)))		
+		(x -> GroupAD.Models.likelihood(info.model,x,L), 
+			merge(parameters, (score = "reconstruction-sampled", L=L))),
+		(x -> GroupAD.Models.reconstruct_input(info.model, x),
+			merge(parameters, (score = "reconstructed_input", L=1)))
 	]
 end
 
 """
 	edit_params(data, parameters)
-
-This function edits the sampled parameters based on nature of data - e.g. dimensions etc. Default
-behaviour is doing nothing - then used `GroupAD.edit_params`.
-""" 
+This modifies parameters according to data. Default version only returns the input arg. 
+Overload for models where this is needed.
+"""
 function edit_params(data, parameters)
 	parameters
 end
@@ -133,7 +126,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		edit_params, 
 		max_seed, 
 		modelname, 
-		dataset,
+		dataset, 
 		contamination, 
 		datadir("experiments/contamination-$(contamination)/LHCO")
 		)

@@ -1,5 +1,3 @@
-using Pkg
-Pkg.activate(split(pwd(), ".jl")[1]*".jl")
 using DrWatson
 @quickactivate
 using ArgParse
@@ -49,7 +47,7 @@ bag_maximum(x) = maximum(x, dims=2)
 """
 function sample_params()
 	par_vec = (
-        2 .^(4:9), 2 .^(3:8), 2 .^(3:8), 2 .^(3:8), ["scalar", "diagonal"],
+        2 .^(4:9), 2 .^(3:6), 2 .^(3:6), 2 .^(3:6), ["scalar", "diagonal"],
         10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"],
         ["bag_mean", "bag_maximum", "mean_max", "mean_max_card", "sum_stat", "sum_stat_card"],
         1:Int(1e8)
@@ -75,7 +73,8 @@ end
 
 Loss for PoolModel.
 """
-loss(model::GroupAD.Models.PoolModel,x) = GroupAD.Models.pm_loss(model, x)
+loss(model::GroupAD.Models.PoolModel, batch) = mean(x -> GroupAD.Models.pm_loss(model, x), batch)
+# loss(model::GroupAD.Models.PoolModel,x) = GroupAD.Models.pm_loss(model, x)
 
 """
 	fit(data, parameters)
@@ -91,7 +90,7 @@ function fit(data, parameters)
 
 	# fit train data
 	try
-		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=60*60*2.5,#82800/max_seed, 
+		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=60*60*23/max_seed,
 			patience=200, check_interval=5, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
@@ -135,6 +134,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		modelname, 
 		dataset, 
 		contamination, 
-		datadir("experiments/contamination-$(contamination)")
+		datadir("experiments/contamination-$(contamination)/LHCO")
 		)
 end

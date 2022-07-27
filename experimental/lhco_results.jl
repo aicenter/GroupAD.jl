@@ -13,6 +13,7 @@ using Statistics
 using DistributionsAD, Flux, GroupAD
 using GroupAD.GenerativeModels
 using ConditionalDists
+using ProgressMeter
 
 """
     compute_stats(row::DataFrameRow)
@@ -96,26 +97,35 @@ function collect_mill(model::String, mill_datasets=mill_datasets)
     Threads.@threads for i in 1:len
         # _df = collect_results(datadir("experiments", "contamination-0.0", model, "MIL", mill_datasets[i]), subfolders=true)
         # _df = collect_results(datadir("experiments", "contamination-0.0_old_data", model, mill_datasets[i]), subfolders=true)
-        _df = collect_results(datadir("experiments", "contamination-0.0", "MIL", model, mill_datasets[i]), subfolders=true)
+        _df = collect_results(datadir("experiments", "contamination-0.0", "MIL", model, mill_datasets[i]), subfolders=true, rexclude=[r"model_.*"])
         dfs[i] = _df
     end
     return vcat(dfs...)
 end
 
-"""
-    mill_collect(model::String; metric::Symbol=:val_AUC, show=false, tf=tf_unicode, filter_fun=nothing)
+function collect_lhco(model::String, dataset="events_anomalydetection_v2.h5")
+    df = collect_results(datadir("experiments", "contamination-0.0", "LHCO", model, dataset), subfolders=true, rexclude=[r"model_.*"])
+end
 
-Collects results for given model, filters only models with completed run over 10 seeds.
+"""
+    calculate_results(model::String; dataset::String="MIL", metric::Symbol=:val_AUC, show=false, tf=tf_unicode, filter_fun=nothing, max_seed=10)
+
+Collects results for given model, filters only models with completed run over `max_seed` seeds.
 Returns a grouped dataframe, where groups are dataset results aggregated over seeds.
 
 Uses parallel processes for collecting results and calculating scores.
 """
-function mill_collect(model::String; metric::Symbol=:val_AUC, show=false, tf=tf_unicode, filter_fun=nothing)
+function calculate_results(model::String; dataset::String="MIL", metric::Symbol=:val_AUC, show=false, tf=tf_unicode, filter_fun=nothing, max_seed=10)
     # load results collection
-    _df = collect_mill(model)
+    if dataset == "MIL"
+        df = collect_mill(model)
+    elseif dataset == "LHCO"
+        df = collect_lhco(model)
+    end
     @info "Data loaded."
-    # filter model files (for vae, statistician...)
-    df = filter(:path => x -> !occursin("model", x), _df)
+    # filter out model files (for vae, statistician...) - not needed with the newest DrWatson's collect_results rexclude
+    # df = filter(:path => x -> !occursin("model", x), _df)
+    # other filtering, if needed
     if !isnothing(filter_fun)
         df = filter_fun(df)
     end
@@ -123,9 +133,11 @@ function mill_collect(model::String; metric::Symbol=:val_AUC, show=false, tf=tf_
     # preallocate and calculate metrics
     n = nrow(df)
     metrics = zeros(n, 4)
+    p = Progress(n, 1)
     Threads.@threads for i in 1:n
         row = df[i,:]
         metrics[i, :] .= compute_stats(row)
+        next!(p)
     end
 
     # add metrics to a dataframe
@@ -140,7 +152,7 @@ function mill_collect(model::String; metric::Symbol=:val_AUC, show=false, tf=tf_
 
     # filter out groups with less than 10 seeds
     k = length(g)
-    b = map(i -> nrow(g[i]) == 10, 1:k)
+    b = map(i -> nrow(g[i]) >= max_seed, 1:k)
     g = g[b]
 
     # get mean values of metrics over seeds
@@ -162,7 +174,7 @@ If `show=true`, prints a PrettyTable with the specified `tf` formatting.
 """
 function mill_model_results(model::String; metric::Symbol=:val_AUC, show=false, tf=tf_unicode, filter_fun=nothing)
     # load results and create a grouped dataframe
-    g2 = mill_collect(model, metric=metric, show=show, tf=tf, filter_fun=filter_fun)
+    g2 = calculate_results(model, dataset="MIL", metric=metric, show=show, tf=tf, filter_fun=filter_fun)
     # find the best model based on metric (validation AUC)
     R = findmaxs(g2, metric)
 
@@ -175,6 +187,20 @@ function mill_model_results(model::String; metric::Symbol=:val_AUC, show=false, 
         pretty_table(R2, nosubheader=true, tf = tf)
     end
 
-    return R2
+    return R2, g2
 end
 
+function lhco_model_results(model::String; metric::Symbol=:val_AUC, show=false, tf=tf_unicode, filter_fun=nothing, max_seed=5)
+    g2 = calculate_results(model, dataset="LHCO", metric=metric, show=show, tf=tf, filter_fun=filter_fun, max_seed=max_seed)
+    R = findmaxs(g2, metric)
+
+    # reorder columns
+    c = ncol(R)
+    R2 = R[:, vcat([1,c-1,c], setdiff(1:c, [1,c,c-1]))]
+
+    # create a pretty table
+    if show
+        pretty_table(R2, nosubheader=true, tf = tf)
+    end
+    R2, g2
+end
