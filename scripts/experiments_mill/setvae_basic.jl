@@ -84,7 +84,7 @@ function sample_params(seed=nothing)
 		[false],			# :lr_decay -> boolean value  or "WarmupCosine". 
 		10f0 .^ (-3:-1),	# :beta -> final β scaling factor for KL divergence
 		[0f0, 50f0], 		# :beta_anealing -> number of anealing epochs!!, if 0 then NO anealing
-		[1000], 			# :epochs -> n of iid iterations (depends on bs and datasize) proportional to n of :epochs 
+		[10000], 			# :epochs -> n of iid iterations (depends on bs and datasize) proportional to n of :epochs 
 		1:Int(1e8), 		# :init_seed -> init seed for random samling for experiment instace 
 	);
 	model_argnames = ( :levels, :hdim, :heads, :activation, :prior, :prior_dim, :vb_depth, :vb_hdim)
@@ -115,16 +115,14 @@ Final parameters is a named tuple of names and parameter values that are used fo
 function fit(data, parameters)
 	# construct model - constructor should only accept kwargs
 	model = GenerativeMIL.Models.setvae_constructor_from_named_tuple( ;idim=size(data[1][1],1), parameters...)
-
 	# fit train data
 	# max. train time: 24 hours, over 10 CPU cores -> 2.4 hours of training for each model
 	# the full traning time should be 48 hours to ensure all scores are calculated
 	# training time is decreased automatically for less cores!
 	
-	global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=24*3600/length(max_seed), 
-			patience=20, check_interval=10, parameters...)
 	try
-		println("test")
+		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=24*3600/length(max_seed), 
+			patience=50, check_interval=10, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
 		@info "Failed training due to \n$e"

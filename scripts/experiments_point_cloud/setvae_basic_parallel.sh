@@ -1,7 +1,4 @@
 #!/bin/bash
-#SBATCH --time=24:00:00
-#SBATCH --nodes=1 --ntasks-per-node=1 --cpus-per-task=1
-#SBATCH --mem=1G
 
 MAX_SEED=$1  
 # seed, if seed =< 0 it is considered concrete single seed to train with

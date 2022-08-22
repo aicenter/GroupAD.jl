@@ -91,7 +91,7 @@ function sample_params(seed=nothing)
 		[false],			# :lr_decay -> boolean value  or "WarmupCosine". 
 		10f0 .^ (-3:-1),	# :beta -> final β scaling factor for KL divergence
 		[0f0, 50f0], 		# :beta_anealing -> number of anealing epochs!!, if 0 then NO anealing
-		[400], 				# :epochs -> n of iid iterations (depends on bs and datasize) proportional to n of :epochs 
+		[1000], 				# :epochs -> n of iid iterations (depends on bs and datasize) proportional to n of :epochs 
 		1:Int(1e8), 		# :init_seed -> init seed for random samling for experiment instace 
 	);
 	model_argnames = ( :levels, :hdim, :heads, :activation, :prior, :prior_dim, :vb_depth, :vb_hdim)
