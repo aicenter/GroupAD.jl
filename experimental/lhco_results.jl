@@ -91,6 +91,11 @@ mill_datasets_wo_Web = [
     "Tiger", "UCSBBreastCancer", "WinterWren"
 ]
 
+"""
+    collect_mill(model::String, mill_datasets=mill_datasets)
+
+Collects the results from all folders of MIL datasets using multi-threading.
+"""
 function collect_mill(model::String, mill_datasets=mill_datasets)
     len = length(mill_datasets)
     dfs = repeat([DataFrame()], len)
@@ -103,14 +108,28 @@ function collect_mill(model::String, mill_datasets=mill_datasets)
     return vcat(dfs...)
 end
 
+"""
+    collect_mill(model::String, mill_datasets=mill_datasets)
+
+Collects the results from LHCO using multi-threading.
+
+*Note: It is recommended to use the same number of threads as the number of seeds.*
+"""
 function collect_lhco(model::String, dataset="events_anomalydetection_v2.h5")
-    df = collect_results(datadir("experiments", "contamination-0.0", "LHCO", model, dataset), subfolders=true, rexclude=[r"model_.*"])
+    dir = readdir(datadir("experiments", "contamination-0.0", "LHCO", model, dataset), join=true)
+    len = length(dir)
+    dfs = repeat([DataFrame()], len)
+    Threads.@threads for i in 1:len
+        _df = collect_results(dir[i], subfolders=true, rexclude=[r"model_.*"])
+        dfs[i] = _df
+    end
+    return vcat(dfs...)
 end
 
 """
     calculate_results(model::String; dataset::String="MIL", metric::Symbol=:val_AUC, show=false, tf=tf_unicode, filter_fun=nothing, max_seed=10)
 
-Collects results for given model, filters only models with completed run over `max_seed` seeds.
+Collects results for given model, filters only models with completed at least `max_seed` runs over the seeds.
 Returns a grouped dataframe, where groups are dataset results aggregated over seeds.
 
 Uses parallel processes for collecting results and calculating scores.
@@ -202,5 +221,5 @@ function lhco_model_results(model::String; metric::Symbol=:val_AUC, show=false, 
     if show
         pretty_table(R2, nosubheader=true, tf = tf)
     end
-    R2, g2
+    R2, g2[1]
 end

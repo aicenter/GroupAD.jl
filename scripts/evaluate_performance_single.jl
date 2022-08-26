@@ -2,6 +2,8 @@
 # in the second case, it will recursively search for all compatible files in subdirectories
 target = ARGS[1]
 
+using Pkg
+Pkg.activate(split(pwd(), ".jl")[1]*".jl")
 using DrWatson
 @quickactivate
 using EvalMetrics
