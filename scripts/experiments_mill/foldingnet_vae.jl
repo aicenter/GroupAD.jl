@@ -16,7 +16,6 @@ using GenerativeMIL: transform_batch
 using GenerativeMIL.Models: check, loss, unpack_mill
 using MLDataPattern
 
-
 s = ArgParseSettings()
 @add_arg_table! s begin
    "max_seed"
@@ -39,7 +38,6 @@ end
 parsed_args = parse_args(ARGS, s)
 @unpack max_seed, dataset, contamination, random_seed = parsed_args
 
-
 ####################################################
 # simple preparation "hacking" before sampling etc #
 ####################################################
@@ -51,7 +49,7 @@ max_seed = (max_seed <= 0) ? [abs(max_seed)] : [1:max_seed...]
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
-modelname = "setvae_basic"
+modelname = "foldingnet_vae"
 # sample parameters, should return a Dict of model kwargs 
 """
 	sample_params()
@@ -60,46 +58,33 @@ Should return a named tuple that contains a sample of model parameters.
 """
 function sample_params(seed=nothing)
 	(seed!==nothing) ? Random.seed!(seed) : nothing
-	# MNIST has idim = 3 -> fewer possibilities for sampling
-	# +/- 2304 (4608) possible combinations, some of sample supports are just placehodlers for future options (with gaussian prior)
-	default(x) = 16*ones(Int, size(x)...)
+
 	model_par_vec = (
-		2:5, 				# :levels -> number of "sampling skip-connections"
-		2 .^(4:6), 			# :hdim -> number of neurons in All dense layers except VariationalBottleneck layers
-		[4],				# :heads -> number of heads in multihead attentions
-		["relu", "swish"], 	# :activation -> type activation functions in model (mainly for outout from MAB)
-		["mog"],			# :prior -> prior distribution for decoder, mog has defaultly 5 mixtures, "gaussian" will be added later
-		2 .^(4:5), 			# :prior_dim -> dimension of prior distributino ("noise") 
-		[1], 				# :vb_depth -> nlayers in VariationalBottleneck
-		[0], 				# :vb_hdim -> hidden dimension in VariationalBottleneck, for :vb_depth=1 is not used
+		[16],					# :n_neighbors -> number of neighbors for knn local seach
+		2 .^(4:6),				# :edim -> number of neurons in encoder 
+		[2 .^(3:6)..., 512],	# :zdim -> latent dimension (512 is added because of orignal paper)
+		["relu", "swish"],		# :activation -> activation function for whole network
+		2 .^(5:7),				# :ddim -> number of neurons in decoder (foldings)
+		["3","n"],				# :pdim -> dimension of "prior" shpere which is later folded	
 	)
-	induced_set_pars = ( 
-		[2 .^(5:-1:1)], 	# :is_sizes -> induced sets sides in top-down encoder 				
-		[reverse, default] 	# :zdims	-> latent dimension at each level ("skip-connection")
-	)
+
 	training_par_vec = (
 		2 .^ (6:7), 		# :batchsize -> size of one training batch
 		10f0 .^(-4:-3),		# :lr -> learning rate
-		[false],			# :lr_decay -> boolean value  or "WarmupCosine". 
-		10f0 .^ (-3:-1),	# :beta -> final β scaling factor for KL divergence
-		[0f0, 50f0], 		# :beta_anealing -> number of anealing epochs!!, if 0 then NO anealing
+		1f0,				# :beta -> final β scaling factor for KL divergence
 		[10000], 			# :epochs -> n of iid iterations (depends on bs and datasize) proportional to n of :epochs 
 		1:Int(1e8), 		# :init_seed -> init seed for random samling for experiment instace 
 	);
-	model_argnames = ( :levels, :hdim, :heads, :activation, :prior, :prior_dim, :vb_depth, :vb_hdim)
-	training_argnames = ( :batchsize, :lr, :lr_decay, :beta, :beta_anealing, :epochs, :init_seed )
+	model_argnames = (:n_neighbors, :edim, :zdim, :activation, :ddim, :pdim)
+	training_argnames = (:batchsize, :lr, :beta, :epochs, :init_seed )
 
 	model_params = (;zip(model_argnames, map(x->sample(x, 1)[1], model_par_vec))...)
 	training_params = (;zip(training_argnames, map(x->sample(x, 1)[1], training_par_vec))...)
-	# IS params
-	levels = model_params[:levels];
-	is_sizes = sample(induced_set_pars[1])[1:levels]
-	zdims = sample(induced_set_pars[2])(is_sizes) 
 
 	#reset seed
 	(seed!==nothing) ? Random.seed!() : nothing
-	# return sampled parameters
-	return merge(model_params,(is_sizes=is_sizes, zdims=zdims), training_params)
+
+	return merge(model_params, training_params)
 end
 
 sample_params_() = (random_seed != 0) ? sample_params(random_seed) : sample_params()
@@ -112,8 +97,24 @@ Each element of the return vector contains a specific anomaly score function - t
 Final parameters is a named tuple of names and parameter values that are used for creation of the savefile name.
 """
 function fit(data, parameters)
-	# construct model - constructor should only accept kwargs
-	model = GenerativeMIL.Models.setvae_constructor_from_named_tuple( ;idim=size(data[1][1],1), parameters...)
+
+	n_dim = size(data[1][1], 1)
+	n_samples = maximum([maximum([size(data[j][1][i].data)[2] for i = 1:length(data[j][1])]) for j=1:3])
+	# n_samples for model is set to max number of instances in bag in dataset
+
+	if parameters[:pdim] == "3"
+		update_params = (;zip((:pdim, :n_samples,),(3, n_samples))...)
+		parameters = merge(update_params, parameters)
+	elseif parameters[:pdim] == "n"
+		update_params = (;zip((:pdim, :n_samples,),(n_dim, n_samples))...)
+		parameters = merge(update_params, parameters)
+	else
+		@error "unknown pdim"
+	end
+	# construct model - constructor should only accept kwargs 
+	model = GenerativeMIL.Models.foldingnet_constructor_from_named_tuple( 
+        ;idim=size(data[1][1],1), local_cov=false, skip=true, parameters...
+    ) # local covariance is not suitable for mil problems
 	# fit train data
 	# max. train time: 24 hours, over 10 CPU cores -> 2.4 hours of training for each model
 	# the full traning time should be 48 hours to ensure all scores are calculated
@@ -140,7 +141,7 @@ function fit(data, parameters)
 	return training_info, [
 		(x -> GenerativeMIL.Models.transform_and_reconstruct(info.model, x, const_module=Base), 
 		merge(parameters, (score = "input",)))
-	]
+	] #FIXME add correct anomaly score
 	#((x, x_mask) -> GenerativeMIL.Models.reconstruct(info.model, x, x_mask), merge(parameters, (score = "reconstructed_input",)))
 end
 
@@ -169,3 +170,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		datadir("experiments/c-$(contamination)")
 		)
 end 
+
+# FIXME fix experimental loop anomaly detection results part
+
+
+
+
+

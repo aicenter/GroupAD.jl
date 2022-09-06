@@ -12,6 +12,7 @@ using DataDeps
 using Mmap
 using Distributions
 using Flux3D
+using HDF5
 # using PyCall
 
 export GenerativeModels

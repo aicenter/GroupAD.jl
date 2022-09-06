@@ -33,21 +33,37 @@ function __init__()
 		))
 	register(
 		DataDep(
-			"ModelNet10",
+			"LHCO2020",
 			"""
-			Dataset: ModelNet10
-			Dataset website: https://github.com/AnTao97/PointCloudDatasets
-			Official website: http://modelnet.cs.princeton.edu/
+			Dataset: LHCO2020
+			Dataset website: https://zenodo.org/record/6466204#.YqCRLXZBzIU
+			Official website: https://lhco2020.github.io/homepage/
 			
-			Princeton ModelNet project of 3D point cloud objects. Using Point Cloud
-			dataset version.
+			LHC Olympics 2020 dataset for high-energy particle physics anomaly detection.
 			""",
 			[
-				"https://www.dropbox.com/s/d5tnwg2legbd6rh/modelnet10_hdf5_2048.zip?dl=1"
+				"https://zenodo.org/record/6466204/files/events_anomalydetection_v2.h5?download=1"
 			],
-			"3dd357dfa1ea4bd858ffb2ff9032368f4dbe131a265fdf126a38bbf97075a8e3",
-			post_fetch_method = unpack
+			"5da8fda2ca78edf8fa5acc0af92fcb6a2d464ba7bf0fd75e3944a169b88cecc6",
+			post_fetch_method = identity
 		))
+	# register(
+	# 	DataDep(
+	# 		"ModelNet10",
+	# 		"""
+	# 		Dataset: ModelNet10
+	# 		Dataset website: https://github.com/AnTao97/PointCloudDatasets
+	# 		Official website: http://modelnet.cs.princeton.edu/
+			
+	# 		Princeton ModelNet project of 3D point cloud objects. Using Point Cloud
+	# 		dataset version.
+	# 		""",
+	# 		[
+	# 			"https://www.dropbox.com/s/d5tnwg2legbd6rh/modelnet10_hdf5_2048.zip?dl=1"
+	# 		],
+	# 		"3dd357dfa1ea4bd858ffb2ff9032368f4dbe131a265fdf126a38bbf97075a8e3",
+	# 		post_fetch_method = unpack
+	# 	))
 end
 
 ### MILL data ###
@@ -85,7 +101,66 @@ function load_mill_data(dataset::String; normalize=true)
 end
 
 ### ModelNet10 point cloud dataset ###
-get_modelnet_datapath() = joinpath(datadep"ModelNet10")
+# get_modelnet_datapath() = joinpath(datadep"ModelNet10")
+
+### LHCO2020 R&D dataset ###
+get_lhco_datapath() = joinpath(datadep"LHCO2020")
+
+if occursin("Python/3.8.6-GCCcore-10.2.0", read(`which python`, String))
+	using PyCall
+end
+
+"""
+    load_lhco(dataset = "events_anomalydetection_v2.h5")
+
+This function loads the LHCO2020 dataset (the R&D version for now)
+and processes it to get a Mill.jl datasets of normal and anomalous
+samples.
+
+Note: PyCall.jl must be installed, Python/3.8 loaded with pandas,
+tables packages installed. If this version is used, the path to
+Python must be `/mnt/appl/software/Python/3.8.6-GCCcore-10.2.0/bin/python`.
+"""
+function load_lhco(dataset = "events_anomalydetection_v2.h5")
+	file = joinpath(get_lhco_datapath(), dataset)
+	if occursin("Python/3.8.6-GCCcore-10.2.0", read(`which python`, String))
+    	pd = pyimport("pandas")
+	end
+
+    data = Array{Float32}[]
+    labels = Int[]
+
+    for i in 0:100000:1100000
+        df_test = pd.read_hdf(file, start=i, stop=i+100000)
+        data_array = df_test[:values]
+
+        for row in eachrow(data_array)#[1:100000, :])
+            label = row[end] |> Int
+            push!(labels, label)
+            zeroix = findfirst(x -> x == 0.0, row) |> Int
+            d = row[1:zeroix-1]
+            al = zeros(Float32, 3, length(d)÷3)
+            al[1,:] = d[1:3:end]
+            al[2,:] = d[2:3:end]
+            al[3,:] = d[3:3:end]
+            push!(data, al)
+        end
+    end
+
+    obs0 = labels .== 0
+    obs1 = labels .== 1
+
+    ls0 = size.(data[obs0], 2)
+    ls1 = size.(data[obs1], 2)
+
+    bagids1 = Mill.length2bags(ls1)
+    bagids0 = Mill.length2bags(ls0)
+
+    return (
+        normal = BagNode(ArrayNode(hcat(data[obs0]...)), bagids0),
+        anomaly = BagNode(ArrayNode(hcat(data[obs1]...)), bagids1)
+    )
+end
 
 ### MNIST point-cloud ###
 # unfortunately this is not available in a direct download format, so we need to do it awkwardly like this
@@ -247,6 +322,40 @@ function load_ember(;normalize=true)
 	close(sx)
 
 	X_train, y_train, X_tst, y_tst
+end
+
+function load_sift(filename::String="capsule_together")
+	file = h5open(datadir("sift_mvtec", "$filename.h5"))
+	data = file["data"][:,:]
+	labels = file["labels"][:]
+	bagids = file["sizes"][:]
+	return data, labels, bagids
+end
+
+function load_mvtec(dataset::String="capsule_together")
+	data, labels, bagids = load_sift(dataset)
+	idxes = Mill.length2bags([sum(bagids .== c) for c in sort(unique(bagids))])
+	bags = Mill.BagNode(Mill.ArrayNode(data), idxes)
+
+	obs0 = labels .== 0
+    obs1 = labels .== 1
+
+	bagids0 = idxes[obs0]
+	bagids1 = idxes[obs1]
+
+	dataix0 = vcat([collect(x) for x in bagids0]...)
+	dataix1 = vcat([collect(x) for x in bagids1]...)
+	f = [first(b) for b in bagids1]
+	l = [last(b) for b in bagids1]
+	l = l .- f[1] .+ 1
+	f = f .- f[1] .+ 1
+	
+	newbagids = [fi:li for (fi, li) in zip(f, l)]
+
+    return (
+        normal = BagNode(ArrayNode(hcat([data[:, b] for b in bagids0]...)), bagids0),
+        anomaly = BagNode(ArrayNode(hcat([data[:, b] for b in bagids1]...)), newbagids)
+    )
 end
 
 
@@ -450,9 +559,14 @@ Apart from `mnist_point_cloud` a.k.a. `MNIST`, the available datasets can be obt
 function load_data(dataset::String, ratios=(0.6,0.2,0.2); seed=nothing, method = "leave-one-out",
 	contamination::Real=0.0, kwargs...)
 
+	mvtec_datasets = ["capsule_together", "hazelnut_together", "pill_together", "screw_together", "toothbrush_together","transistor_together"]
 	# extract data and labels
 	if dataset in ["MNIST", "mnist_point_cloud"]
 		data_normal, data_anomalous, _, _ = load_mnist_point_cloud(;kwargs...)
+	elseif occursin("events", dataset)
+		data_normal, data_anomalous = load_lhco(dataset; kwargs...)
+	elseif dataset in mvtec_datasets
+		data_normal, data_anomalous = load_mvtec(dataset; kwargs...)
 	else
 		data_normal, data_anomalous = load_mill_data(dataset; kwargs...)
 	end
