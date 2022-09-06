@@ -558,8 +558,7 @@ Apart from `mnist_point_cloud` a.k.a. `MNIST`, the available datasets can be obt
 """
 function load_data(dataset::String, ratios=(0.6,0.2,0.2); seed=nothing, method = "leave-one-out",
 	contamination::Real=0.0, kwargs...)
-
-	mvtec_datasets = ["capsule_together", "hazelnut_together", "pill_together", "screw_together", "toothbrush_together","transistor_together"]
+	mvtec_datasets = ["capsule", "hazelnut", "pill", "screw", "toothbrush","transistor"]
 	# extract data and labels
 	if dataset in ["MNIST", "mnist_point_cloud"]
 		data_normal, data_anomalous, _, _ = load_mnist_point_cloud(;kwargs...)
