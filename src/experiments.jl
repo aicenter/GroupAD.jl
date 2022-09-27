@@ -7,6 +7,10 @@ Eval score function on test/val/train data and save.
 """
 function experiment(score_fun, parameters, data, savepath; verb=true, save_result=true, save_entries...)
 	tr_data, val_data, tst_data = data
+	# unpack data for easier manipulation
+	tr_data, tr_lab = GroupAD.Models.unpack_mill(tr_data)
+	val_data, val_lab = GroupAD.Models.unpack_mill(val_data)
+	tst_data, tst_lab = GroupAD.Models.unpack_mill(tst_data)
 
 	# extract scores
 	tr_scores, tr_eval_t, _, _, _ = @timed score_fun(tr_data[1])
@@ -48,7 +52,7 @@ function experiment_bag(score_fun, parameters, data, savepath; verb=true, save_r
 		experiment_likelihoods(score_fun, parameters, data, savepath; verb=verb, save_result=save_result, save_entries...)
 
 	# calculate the scores from reconstructed input
-	elseif parameters[:score] == "reconstructed_input"
+	elseif parameters[:score] in ["reconstructed_input", "input"]
 		experiment_reconstructed_input(score_fun, parameters, data, savepath; verb=verb, save_result=save_result, save_entries...)
 	end
 end
@@ -445,6 +449,7 @@ function experimental_loop_gpu(sample_params_f, fit_f, edit_params_f,
 			if check_params(_savepath, edited_parameters)
 				@info "Params check done. Trying to fit."
 				# fit
+
 				training_info, results = fit_f(data, edited_parameters)
 				
 				# save the model separately			
@@ -468,11 +473,12 @@ function experimental_loop_gpu(sample_params_f, fit_f, edit_params_f,
 
 				# now loop over all anomaly score funs
 				@time for result in results
-					if modelname in ["vae_instance", "statistician", "PoolModel"]
+					if modelname in ["vae_instance", "statistician", "PoolModel"] # TODO try to move foldng net to experiments
 						experiment_bag(result..., data, _savepath; save_entries...)
 					elseif modelname in ["setvae_basic"]
 						experiment_reconstructed_input_batched(result..., data, _savepath; save_entries...)
 					else
+						@info "running experiment function in else statement"
 						experiment(result..., data, _savepath; save_entries...) # should work for setvae
 					end
 				end

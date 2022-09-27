@@ -349,7 +349,8 @@ function load_mvtec(dataset::String="capsule_together")
 	l = [last(b) for b in bagids1]
 	l = l .- f[1] .+ 1
 	f = f .- f[1] .+ 1
-	
+	data = standardize(data)
+
 	newbagids = [fi:li for (fi, li) in zip(f, l)]
 
     return (

@@ -10,6 +10,7 @@ using ValueHistories
 #generative MIL
 using GenerativeMIL
 using Flux
+using Flux3D
 using Zygote
 using CUDA
 using GenerativeMIL: transform_batch
@@ -60,7 +61,7 @@ function sample_params(seed=nothing)
 	(seed!==nothing) ? Random.seed!(seed) : nothing
 
 	model_par_vec = (
-		[16],					# :n_neighbors -> number of neighbors for knn local seach
+		[3, 16],				# :n_neighbors -> number of neighbors for knn local seach
 		2 .^(4:6),				# :edim -> number of neurons in encoder 
 		[2 .^(3:6)..., 512],	# :zdim -> latent dimension (512 is added because of orignal paper)
 		["relu", "swish"],		# :activation -> activation function for whole network
@@ -71,10 +72,10 @@ function sample_params(seed=nothing)
 	training_par_vec = (
 		2 .^ (6:7), 		# :batchsize -> size of one training batch
 		10f0 .^(-4:-3),		# :lr -> learning rate
-		1f0,				# :beta -> final β scaling factor for KL divergence
+		[1f0],				# :beta -> final β scaling factor for KL divergence
 		[10000], 			# :epochs -> n of iid iterations (depends on bs and datasize) proportional to n of :epochs 
 		1:Int(1e8), 		# :init_seed -> init seed for random samling for experiment instace 
-	);
+	)
 	model_argnames = (:n_neighbors, :edim, :zdim, :activation, :ddim, :pdim)
 	training_argnames = (:batchsize, :lr, :beta, :epochs, :init_seed )
 
@@ -100,17 +101,23 @@ function fit(data, parameters)
 
 	n_dim = size(data[1][1], 1)
 	n_samples = maximum([maximum([size(data[j][1][i].data)[2] for i = 1:length(data[j][1])]) for j=1:3])
+	min_n_samples = minimum([minimum([size(data[j][1][i].data)[2] for i = 1:length(data[j][1])]) for j=1:3])
 	# n_samples for model is set to max number of instances in bag in dataset
 
 	if parameters[:pdim] == "3"
 		update_params = (;zip((:pdim, :n_samples,),(3, n_samples))...)
-		parameters = merge(update_params, parameters)
+		parameters = merge(parameters, update_params)
 	elseif parameters[:pdim] == "n"
 		update_params = (;zip((:pdim, :n_samples,),(n_dim, n_samples))...)
-		parameters = merge(update_params, parameters)
+		parameters = merge(parameters, update_params)
 	else
 		@error "unknown pdim"
 	end
+	if parameters[:n_neighbors] > min_n_samples
+		update_params = (n_neighbors=min_n_samples,)
+		parameters = merge(parameters, update_params)
+	end
+	@info "check pdim", parameters
 	# construct model - constructor should only accept kwargs 
 	model = GenerativeMIL.Models.foldingnet_constructor_from_named_tuple( 
         ;idim=size(data[1][1],1), local_cov=false, skip=true, parameters...
@@ -122,7 +129,7 @@ function fit(data, parameters)
 	
 	try
 		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=24*3600/length(max_seed), 
-			patience=50, check_interval=10, parameters...)
+			patience=200, check_interval=10, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
 		@info "Failed training due to \n$e"
@@ -139,10 +146,9 @@ function fit(data, parameters)
 
 	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
 	return training_info, [
-		(x -> GenerativeMIL.Models.transform_and_reconstruct(info.model, x, const_module=Base), 
+		(x -> Flux3D.chamfer_distance(model(x), x), 
 		merge(parameters, (score = "input",)))
-	] #FIXME add correct anomaly score
-	#((x, x_mask) -> GenerativeMIL.Models.reconstruct(info.model, x, x_mask), merge(parameters, (score = "reconstructed_input",)))
+	] #FIXME test me
 end
 
 """
