@@ -95,14 +95,27 @@ edit_params = GroupAD.edit_params
 ####################################################################
 ################ THIS PART IS COMMON FOR ALL MODELS ################
 if abspath(PROGRAM_FILE) == @__FILE__
-	GroupAD.basic_experimental_loop(
-		sample_params, 
-		fit, 
-		edit_params, 
-		max_seed, 
-		modelname, 
-		dataset, 
-		contamination, 
-		datadir("experiments/contamination-$(contamination)/MIL")
+	if in(dataset, mill_datasets)
+		GroupAD.basic_experimental_loop(
+			sample_params, 
+			fit, 
+			edit_params, 
+			max_seed, 
+			modelname, 
+			dataset, 
+			contamination, 
+			datadir("experiments/contamination-$(contamination)/MIL"),
 		)
+	elseif in(dataset, mvtec_datasets)
+		GroupAD.basic_experimental_loop(
+			sample_params, 
+			fit, 
+			edit_params, 
+			max_seed, 
+			modelname, 
+			dataset, 
+			contamination, 
+			datadir("experiments/contamination-$(contamination)/mv_tec")
+		)
+	end
 end

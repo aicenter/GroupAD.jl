@@ -28,10 +28,12 @@ julia GroupAD.jl/scripts/evaluate_performance_single.jl path/to/results
 
 ## Running experiments on the RCI cluster
 
+*Note: Since LHCO dataset, Python is needed for data loading. Use Python/3.8 to install `pandas`.*
+
 0. First, load Julia and Python modules.
 ```bash
 ml Julia
-ml Python
+ml Python/3.8
 ```
 1. Install the package somewhere on the RCI cluster.
 2. Then the experiments can be run via `slurm`. This will run 20 experiments with the basic VAE model, each with 5 crossvalidation repetitions on all datasets in the text file with 10 parallel processes for each dataset.

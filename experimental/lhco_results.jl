@@ -126,6 +126,16 @@ function collect_lhco(model::String, dataset="events_anomalydetection_v2.h5")
     return vcat(dfs...)
 end
 
+function collect_mvtec(model::String, datasets=mvtec_datasets)
+    len = length(mvtec_datasets)
+    dfs = repeat([DataFrame()], len)
+    Threads.@threads for i in 1:len
+        _df = collect_results(datadir("experiments", "contamination-0.0", "mv_tec", model, datasets[i]), subfolders=true, rexclude=[r"model_.*"])
+        dfs[i] = _df
+    end
+    return vcat(dfs...)
+end
+
 """
     calculate_results(model::String; dataset::String="MIL", metric::Symbol=:val_AUC, show=false, tf=tf_unicode, filter_fun=nothing, max_seed=10)
 
@@ -140,6 +150,8 @@ function calculate_results(model::String; dataset::String="MIL", metric::Symbol=
         df = collect_mill(model)
     elseif dataset == "LHCO"
         df = collect_lhco(model)
+    elseif dataset == "mvtec"
+        df = collect_mvtec(model)
     end
     @info "Data loaded."
     # filter out model files (for vae, statistician...) - not needed with the newest DrWatson's collect_results rexclude
@@ -222,4 +234,38 @@ function lhco_model_results(model::String; metric::Symbol=:val_AUC, show=false, 
         pretty_table(R2, nosubheader=true, tf = tf)
     end
     R2, g2[1]
+end
+
+function mvtec_model_results(model::String; metric::Symbol=:val_AUC, show=false, tf=tf_unicode, filter_fun=nothing, max_seed=5)
+    # load results and create a grouped dataframe
+    g2 = calculate_results(model, dataset="mvtec", metric=metric, show=show, tf=tf, filter_fun=filter_fun, max_seed=max_seed)
+    # find the best model based on metric (validation AUC)
+    R = findmaxs(g2, metric)
+
+    # reorder columns
+    c = ncol(R)
+    R2 = R[:, vcat([1,c-1,c], setdiff(1:c, [1,c,c-1]))]
+
+    # create a pretty table
+    if show
+        pretty_table(R2, nosubheader=true, tf = tf)
+    end
+
+    return R2, g2
+end
+
+function results_all_models(dataset::String; models = ["knn_basic", "vae_basic", "vae_instance", "statistician", "PoolModel"],
+                            metric::Symbol=:val_AUC, show=false, tf=tf_unicode, filter_fun=nothing, max_seed=5)
+    PT = []
+
+    for model in models
+        g = calculate_results(model, dataset=dataset, metric=metric, show=show, tf=tf, filter_fun=filter_fun, max_seed=max_seed)
+        R = findmaxs(g, metric)
+        c = ncol(R)
+        R2 = R[:, vcat([1,c-1,c], setdiff(1:c, [1,c,c-1]))]
+        p = hcat(DataFrame(:modelname => model), R2)
+        push!(PT, p)
+    end
+
+    map(x -> pretty_table(x, nosubheader=true, tf=tf), PT)
 end

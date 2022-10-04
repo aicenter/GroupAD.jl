@@ -324,6 +324,40 @@ function load_ember(;normalize=true)
 	X_train, y_train, X_tst, y_tst
 end
 
+function load_sift(filename::String="capsule_together")
+	file = h5open(datadir("sift_mvtec", "$filename.h5"))
+	data = file["data"][:,:]
+	labels = file["labels"][:]
+	bagids = file["sizes"][:]
+	return data, labels, bagids
+end
+
+function load_mvtec(dataset::String="capsule_together")
+	data, labels, bagids = load_sift()
+	idxes = Mill.length2bags([sum(bagids .== c) for c in sort(unique(bagids))])
+	bags = Mill.BagNode(Mill.ArrayNode(data), idxes)
+
+	obs0 = labels .== 0
+    obs1 = labels .== 1
+
+	bagids0 = idxes[obs0]
+	bagids1 = idxes[obs1]
+
+	dataix0 = vcat([collect(x) for x in bagids0]...)
+	dataix1 = vcat([collect(x) for x in bagids1]...)
+	f = [first(b) for b in bagids1]
+	l = [last(b) for b in bagids1]
+	l = l .- f[1] .+ 1
+	f = f .- f[1] .+ 1
+	
+	newbagids = [fi:li for (fi, li) in zip(f, l)]
+
+    return (
+        normal = BagNode(ArrayNode(hcat([data[:, b] for b in bagids0]...)), bagids0),
+        anomaly = BagNode(ArrayNode(hcat([data[:, b] for b in bagids1]...)), newbagids)
+    )
+end
+
 
 """
 	seqids2bags(bagids)
@@ -530,6 +564,8 @@ function load_data(dataset::String, ratios=(0.6,0.2,0.2); seed=nothing, method =
 		data_normal, data_anomalous, _, _ = load_mnist_point_cloud(;kwargs...)
 	elseif occursin("events", dataset)
 		data_normal, data_anomalous = load_lhco(dataset; kwargs...)
+	elseif dataset in mvtec_datasets
+		data_normal, data_anomalous = load_mvtec(dataset; kwargs...)
 	else
 		data_normal, data_anomalous = load_mill_data(dataset; kwargs...)
 	end
