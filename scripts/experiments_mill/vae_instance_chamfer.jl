@@ -7,6 +7,7 @@ using StatsBase
 using BSON
 using Flux
 using GroupAD.GenerativeModels
+using GroupAD.Models: fit_bag!
 
 s = ArgParseSettings()
 @add_arg_table! s begin
@@ -28,7 +29,7 @@ parsed_args = parse_args(ARGS, s)
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
-modelname = "vae_basic"
+modelname = "vae_instance_chamfer"
 # sample parameters, should return a Dict of model kwargs 
 """
 	sample_params()
@@ -36,9 +37,8 @@ modelname = "vae_basic"
 Should return a named tuple that contains a sample of model parameters.
 """
 function sample_params()
-	par_vec = (2 .^(3:8), 2 .^(4:9), ["scalar", "diagonal"], 10f0 .^(-4:-3), 2 .^ (5:7), ["relu", "swish", "tanh"], 3:4, 1:Int(1e8),
-		["mean", "maximum", "median"])
-	argnames = (:zdim, :hdim, :var, :lr, :batchsize, :activation, :nlayers, :init_seed, :aggregation)
+	par_vec = (2 .^(3:8), 2 .^(4:9), ["scalar", "diagonal"], 10f0 .^(-4:-3), 2 .^ (5:7), ["relu", "swish", "tanh"], 3:4, 1:Int(1e8))
+	argnames = (:zdim, :hdim, :var, :lr, :batchsize, :activation, :nlayers, :init_seed)
 	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
 	# ensure that zdim < hdim
 	while parameters.zdim >= parameters.hdim
@@ -50,12 +50,9 @@ end
 """
 	loss(model::GenerativeModels.VAE, x[, batchsize])
 
-Negative ELBO for training of a VAE model.
+Chamfer ELBO for the VAE model on instances.
 """
-loss(model::GenerativeModels.VAE, x) = -elbo(model, x)
-# version of loss for large datasets
-loss(model::GenerativeModels.VAE, x, batchsize::Int) = 
-	mean(map(y->loss(model,y), Flux.Data.DataLoader(x, batchsize=batchsize)))
+loss(model::GenerativeModels.VAE, batch) = mean(x -> GroupAD.GenerativeModels.chamfer_elbo(model, x), batch)
 
 """
 	fit(data, parameters)
@@ -68,15 +65,11 @@ Final parameters is a named tuple of names and parameter values that are used fo
 function fit(data, parameters)
 	# construct model - constructor should only accept kwargs
 	model = GroupAD.Models.vae_constructor(;idim=size(data[1][1],1), parameters...)
-
-	# aggregate bags into vectors
-	# first convert the aggregation string to a function
-	agf = getfield(StatsBase, Symbol(parameters.aggregation))
-	data = GroupAD.Models.aggregate(data, agf)
+	# get only the data needed and unpack them from bags to intances
 
 	# fit train data
 	try
-		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=82800/max_seed, 
+		global info, fit_t, _, _, _ = @timed fit_bag!(model, data, loss; max_train_time=82800/max_seed, 
 			patience=200, check_interval=10, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
@@ -92,16 +85,10 @@ function fit(data, parameters)
 		model = info.model
 		)
 
-	# now return the infor to be saved and an array of tuples (anomaly score function, hyperparatemers)
-	L=100
-	batchsize=512
+	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
 	training_info, [
-		(x -> GroupAD.Models.reconstruction_score(info.model,x,agf), 
-			merge(parameters, (score = "reconstruction", L=1))),
-		(x -> GroupAD.Models.reconstruction_score_mean(info.model,x,agf), 
-			merge(parameters, (score = "reconstruction-mean", L=1))),
-		(x -> GroupAD.Models.reconstruction_score(info.model,x,agf,L), 
-			merge(parameters, (score = "reconstruction-sampled", L=L)))		
+		(x -> GroupAD.Models.reconstruct(info.model,x), 
+			merge(parameters, (score = "reconstructed_input", L=1)))
 	]
 end
 
@@ -126,14 +113,27 @@ end
 ################ THIS PART IS COMMON FOR ALL MODELS ################
 # only execute this if run directly - so it can be included in other files
 if abspath(PROGRAM_FILE) == @__FILE__
-	GroupAD.basic_experimental_loop(
-		sample_params, 
-		fit, 
-		edit_params, 
-		max_seed, 
-		modelname, 
-		dataset, 
-		contamination, 
-		datadir("experiments/contamination-$(contamination)/MIL")
+	if in(dataset, mill_datasets)
+		GroupAD.basic_experimental_loop(
+			sample_params, 
+			fit, 
+			edit_params, 
+			max_seed, 
+			modelname, 
+			dataset, 
+			contamination, 
+			datadir("experiments/contamination-$(contamination)/MIL"),
 		)
+	elseif in(dataset, mvtec_datasets)
+		GroupAD.basic_experimental_loop(
+			sample_params, 
+			fit, 
+			edit_params, 
+			max_seed, 
+			modelname, 
+			dataset, 
+			contamination, 
+			datadir("experiments/contamination-$(contamination)/mv_tec")
+		)
+	end
 end

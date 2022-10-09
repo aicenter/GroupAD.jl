@@ -31,7 +31,18 @@ function elbo(m::AbstractVAE, x::AbstractArray; β=1)
     llh - β*kld
 end
 
+function chamfer_elbo(m::AbstractVAE, x::AbstractArray; β=1)
+    # sample latent
+    z = rand(m.encoder, x) #custom function in utils.jl
 
+    # chamfer reconstruction error
+    ch = chamfer_distance(x, rand(m.decoder, z))
+
+    # KLD with `condition`ed encoder
+    kld = mean(kl_divergence(condition(m.encoder, x), m.prior))
+
+    ch + β*kld
+end
 
 
 

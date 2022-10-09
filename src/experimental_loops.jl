@@ -113,7 +113,7 @@ function basic_experimental_loop(sample_params_f, fit_f, edit_params_f,
 
 				# now loop over all anomaly score funs
 				@time for result in results
-					if modelname in ["vae_instance", "statistician", "PoolModel"]
+					if modelname in ["vae_instance", "vae_instance_chamfer", "statistician", "statistician_chamfer", "PoolModel"]
 						experiment_bag(result..., data, _savepath; save_entries...)
 					elseif modelname in ["SMM", "SMMC"]
 						experiment(result..., GroupAD.Models.unpack_mill.(data), _savepath; save_entries...)

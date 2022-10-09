@@ -6,6 +6,7 @@ module GenerativeModels
 
     using Distributions
     using DistributionsAD
+    using Flux3D: chamfer_distance
     #@reexport using ConditionalDists
     #@reexport using IPMeasures
 
