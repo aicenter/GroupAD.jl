@@ -8,7 +8,6 @@ using BSON
 using Flux
 using GroupAD.GenerativeModels
 using Distributions
-using GroupAD.Models: mean_max, mean_max_card, sum_stat, sum_stat_card, bag_mean, bag_maximum
 
 s = ArgParseSettings()
 @add_arg_table! s begin
@@ -17,7 +16,7 @@ s = ArgParseSettings()
         help = "seed"
         default = 1
     "dataset"
-        default = "Fox"
+    default = "events_anomalydetection_v2.h5"
         arg_type = String
         help = "dataset"
    "contamination"
@@ -30,50 +29,39 @@ parsed_args = parse_args(ARGS, s)
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
-modelname = "PoolModel"
+modelname = "statistician"
 # sample parameters, should return a Dict of model kwargs 
 """
 	sample_params()
 
 Should return a named tuple that contains a sample of model parameters.
-Mean and maximum separately can be added but probably as different functions
-since classical `mean` would return a single value.
-
-E.g.
-````
-bag_mean(x) = mean(x, dims=2)
-bag_maximum(x) = maximum(x, dims=2)
-```
+For NeuralStatistician, latent dimensions cdim and zdim should be smaller
+or equal to hidden dimension:
+- `cdim` <= `hdim`
+- `vdim` <= `hdim`
+- `zdim` <= `hdim`
 """
 function sample_params()
-	par_vec = (
-        2 .^(4:9), 2 .^(3:8), 2 .^(3:8), 2 .^(3:8), ["scalar", "diagonal"],
-        10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"],
-        ["bag_mean", "bag_maximum", "mean_max", "mean_max_card", "sum_stat", "sum_stat_card"],
-        1:Int(1e8)
-    )
-	argnames = (:hdim, :predim, :postdim, :edim, :var, :lr, :nlayers, :batchsize, :activation, :poolf, :init_seed)
+	par_vec = (2 .^(4:9), 2 .^(3:8), 2 .^(3:8), [1,2,3], ["scalar", "diagonal"], 10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"], 1:Int(1e8))
+	argnames = (:hdim, :vdim, :cdim, :zdim, :var, :lr, :nlayers, :batchsize, :activation, :init_seed)
 	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
 	
-	# ensure that predim, postdim, edim <= hdim
-	while parameters.predim >= parameters.hdim
-		parameters = merge(parameters, (predim = sample(par_vec[2]),))
+	# ensure that vdim, zdim, cdim <= hdim
+	while parameters.vdim >= parameters.hdim
+		parameters = merge(parameters, (vdim = sample(par_vec[2]),))
 	end
-	while parameters.postdim >= parameters.hdim
-		parameters = merge(parameters, (postdim = sample(par_vec[3]),))
-	end
-	while parameters.edim >= parameters.hdim
-		parameters = merge(parameters, (edim = sample(par_vec[4]),))
+	while parameters.cdim >= parameters.hdim
+		parameters = merge(parameters, (cdim = sample(par_vec[3]),))
 	end
 	return parameters
 end
 
 """
-    loss(model::GroupAD.Models.PoolModel, batch)
+	loss(model::GenerativeModels.NeuralStatistician, x)
 
-Loss for PoolModel calculated as a mean over the whole minibatch.
+Negative ELBO for training of a Neural Statistician model.
 """
-loss(model::GroupAD.Models.PoolModel, batch) = mean(x -> GroupAD.Models.pm_loss(model, x), batch)
+loss(model::GenerativeModels.NeuralStatistician, batch) = mean(x -> -GroupAD.Models.elbo1(model, x), batch)
 
 """
 	fit(data, parameters)
@@ -85,11 +73,11 @@ Final parameters is a named tuple of names and parameter values that are used fo
 """
 function fit(data, parameters)
 	# construct model - constructor should only accept kwargs
-	model = GroupAD.Models.pm_constructor(;idim=size(data[1][1],1), parameters...)
+	model = GroupAD.Models.statistician_constructor(;idim=size(data[1][1],1), parameters...)
 
 	# fit train data
 	try
-		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=82800/max_seed, 
+		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=60*60*23/max_seed, 
 			patience=200, check_interval=5, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
@@ -106,9 +94,16 @@ function fit(data, parameters)
 		)
 
 	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
+	L=100
 	return training_info, [
-		(x -> GroupAD.Models.reconstruct(info.model, x),
-			merge(parameters, (score = "reconstructed_input",)))
+		(x -> GroupAD.Models.likelihood(info.model,x), 
+			merge(parameters, (score = "reconstruction", L=1))),
+		(x -> GroupAD.Models.mean_likelihood(info.model,x), 
+			merge(parameters, (score = "reconstruction-mean", L=1))),
+		(x -> GroupAD.Models.likelihood(info.model,x,L), 
+			merge(parameters, (score = "reconstruction-sampled", L=L))),
+		(x -> GroupAD.Models.reconstruct_input(info.model, x),
+			merge(parameters, (score = "reconstructed_input", L=1)))
 	]
 end
 
@@ -125,27 +120,14 @@ end
 ################ THIS PART IS COMMON FOR ALL MODELS ################
 # only execute this if run directly - so it can be included in other files
 if abspath(PROGRAM_FILE) == @__FILE__
-	if in(dataset, mill_datasets)
-		GroupAD.basic_experimental_loop(
-			sample_params, 
-			fit, 
-			edit_params, 
-			max_seed, 
-			modelname, 
-			dataset, 
-			contamination, 
-			datadir("experiments/contamination-$(contamination)/MIL"),
+	GroupAD.basic_experimental_loop(
+		sample_params, 
+		fit, 
+		edit_params, 
+		max_seed, 
+		modelname, 
+		dataset, 
+		contamination, 
+		datadir("experiments/contamination-$(contamination)/LHCO")
 		)
-	elseif in(dataset, mvtec_datasets)
-		GroupAD.basic_experimental_loop(
-			sample_params, 
-			fit, 
-			edit_params, 
-			max_seed, 
-			modelname, 
-			dataset, 
-			contamination, 
-			datadir("experiments/contamination-$(contamination)/mv_tec")
-		)
-	end
 end

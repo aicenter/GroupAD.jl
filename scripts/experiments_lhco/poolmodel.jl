@@ -17,7 +17,7 @@ s = ArgParseSettings()
         help = "seed"
         default = 1
     "dataset"
-        default = "Fox"
+        default = "events_anomalydetection_v2.h5"
         arg_type = String
         help = "dataset"
    "contamination"
@@ -47,7 +47,7 @@ bag_maximum(x) = maximum(x, dims=2)
 """
 function sample_params()
 	par_vec = (
-        2 .^(4:9), 2 .^(3:8), 2 .^(3:8), 2 .^(3:8), ["scalar", "diagonal"],
+        2 .^(4:9), 2 .^(3:6), 2 .^(3:6), 2 .^(3:6), ["scalar", "diagonal"],
         10f0 .^(-4:-3), 3:4, 2 .^(5:7), ["relu", "swish", "tanh"],
         ["bag_mean", "bag_maximum", "mean_max", "mean_max_card", "sum_stat", "sum_stat_card"],
         1:Int(1e8)
@@ -69,11 +69,12 @@ function sample_params()
 end
 
 """
-    loss(model::GroupAD.Models.PoolModel, batch)
+    loss(model::GroupAD.Models.PoolModel,x)
 
-Loss for PoolModel calculated as a mean over the whole minibatch.
+Loss for PoolModel.
 """
 loss(model::GroupAD.Models.PoolModel, batch) = mean(x -> GroupAD.Models.pm_loss(model, x), batch)
+# loss(model::GroupAD.Models.PoolModel,x) = GroupAD.Models.pm_loss(model, x)
 
 """
 	fit(data, parameters)
@@ -89,7 +90,7 @@ function fit(data, parameters)
 
 	# fit train data
 	try
-		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=82800/max_seed, 
+		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=60*60*23/max_seed,
 			patience=200, check_interval=5, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
@@ -125,27 +126,14 @@ end
 ################ THIS PART IS COMMON FOR ALL MODELS ################
 # only execute this if run directly - so it can be included in other files
 if abspath(PROGRAM_FILE) == @__FILE__
-	if in(dataset, mill_datasets)
-		GroupAD.basic_experimental_loop(
-			sample_params, 
-			fit, 
-			edit_params, 
-			max_seed, 
-			modelname, 
-			dataset, 
-			contamination, 
-			datadir("experiments/contamination-$(contamination)/MIL"),
+	GroupAD.basic_experimental_loop(
+		sample_params, 
+		fit, 
+		edit_params, 
+		max_seed, 
+		modelname, 
+		dataset, 
+		contamination, 
+		datadir("experiments/contamination-$(contamination)/LHCO")
 		)
-	elseif in(dataset, mvtec_datasets)
-		GroupAD.basic_experimental_loop(
-			sample_params, 
-			fit, 
-			edit_params, 
-			max_seed, 
-			modelname, 
-			dataset, 
-			contamination, 
-			datadir("experiments/contamination-$(contamination)/mv_tec")
-		)
-	end
 end

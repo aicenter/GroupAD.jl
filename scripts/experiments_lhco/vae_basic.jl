@@ -15,7 +15,7 @@ s = ArgParseSettings()
         help = "seed"
         default = 1
     "dataset"
-        default = "Fox"
+        default = "events_anomalydetection_v2.h5"
         arg_type = String
         help = "dataset"
    "contamination"
@@ -28,7 +28,17 @@ parsed_args = parse_args(ARGS, s)
 
 #######################################################################################
 ################ THIS PART IS TO BE PROVIDED FOR EACH MODEL SEPARATELY ################
-modelname = "vae_instance"
+modelname = "vae_basic"
+
+function mean_min_max_c(x; dims)
+	m1 = mean(x; dims=dims)
+	m2 = minimum(x; dims=dims)
+	m3 = maximum(x; dims=dims)
+	m4 = median(x; dims=dims)
+	c = size(x, 2)
+	return vcat(m1, m2, m3, m4, c)
+end
+
 # sample parameters, should return a Dict of model kwargs 
 """
 	sample_params()
@@ -36,13 +46,10 @@ modelname = "vae_instance"
 Should return a named tuple that contains a sample of model parameters.
 """
 function sample_params()
-	par_vec = (2 .^(3:8), 2 .^(4:9), ["scalar", "diagonal"], 10f0 .^(-4:-3), 2 .^ (5:7), ["relu", "swish", "tanh"], 3:4, 1:Int(1e8))
-	argnames = (:zdim, :hdim, :var, :lr, :batchsize, :activation, :nlayers, :init_seed)
+	par_vec = ([1,2,3], 2 .^(4:9), ["scalar", "diagonal"], 10f0 .^(-4:-3), 2 .^ (5:7), ["relu", "swish", "tanh"], 3:4, 1:Int(1e8),
+		["mean", "maximum", "median", "mean_min_max_c"])
+	argnames = (:zdim, :hdim, :var, :lr, :batchsize, :activation, :nlayers, :init_seed, :aggregation)
 	parameters = (;zip(argnames, map(x->sample(x, 1)[1], par_vec))...)
-	# ensure that zdim < hdim
-	while parameters.zdim >= parameters.hdim
-		parameters = merge(parameters, (zdim = sample(par_vec[1])[1],))
-	end
 	return parameters
 end
 
@@ -57,22 +64,6 @@ loss(model::GenerativeModels.VAE, x, batchsize::Int) =
 	mean(map(y->loss(model,y), Flux.Data.DataLoader(x, batchsize=batchsize)))
 
 """
-    train_val_data(data::Tuple)
-
-Make the data trainable via the basic vae model and its fit function.
-"""
-function train_val_data(data::Tuple)
-    train, val, test = data
-
-    train_new = (train[1].data.data, train[2])
-    val_inst = GroupAD.reindex(val[1],val[2] .== 0).data.data
-    nv = size(val_inst,2)
-    nv_all = size(val[1].data.data,2)
-    val_new = (val[1].data.data, vcat(zeros(Float32,nv),ones(Float32,nv_all-nv)))
-    return (train_new, val_new)
-end
-
-"""
 	fit(data, parameters)
 
 This is the most important function - returns `training_info` and a tuple or a vector of tuples `(score_fun, final_parameters)`.
@@ -81,14 +72,19 @@ Each element of the return vector contains a specific anomaly score function - t
 Final parameters is a named tuple of names and parameter values that are used for creation of the savefile name.
 """
 function fit(data, parameters)
+
+	# aggregate bags into vectors
+	# first convert the aggregation string to a function
+	# agf = getfield(StatsBase, Symbol(parameters.aggregation))
+	agf = eval(Symbol(parameters.aggregation))
+	data = GroupAD.Models.aggregate(data, agf)
+
 	# construct model - constructor should only accept kwargs
 	model = GroupAD.Models.vae_constructor(;idim=size(data[1][1],1), parameters...)
-	# get only the data needed and unpack them from bags to intances
-    instance_data = train_val_data(data)
 
 	# fit train data
 	try
-		global info, fit_t, _, _, _ = @timed fit!(model, instance_data, loss; max_train_time=82800/max_seed, 
+		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=60*60*23/max_seed, 
 			patience=200, check_interval=10, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
@@ -104,17 +100,16 @@ function fit(data, parameters)
 		model = info.model
 		)
 
-	# now return the info to be saved and an array of tuples (anomaly score function, hyperparatemers)
+	# now return the infor to be saved and an array of tuples (anomaly score function, hyperparatemers)
 	L=100
+	batchsize=512
 	training_info, [
-		(x -> GroupAD.Models.likelihood(info.model,x), 
+		(x -> GroupAD.Models.reconstruction_score(info.model,x,agf), 
 			merge(parameters, (score = "reconstruction", L=1))),
-		(x -> GroupAD.Models.mean_likelihood(info.model,x), 
+		(x -> GroupAD.Models.reconstruction_score_mean(info.model,x,agf), 
 			merge(parameters, (score = "reconstruction-mean", L=1))),
-		(x -> GroupAD.Models.likelihood(info.model,x,L), 
-			merge(parameters, (score = "reconstruction-sampled", L=L))),
-		(x -> GroupAD.Models.reconstruct(info.model,x), 
-			merge(parameters, (score = "reconstructed_input", L=1)))
+		(x -> GroupAD.Models.reconstruction_score(info.model,x,agf,L), 
+			merge(parameters, (score = "reconstruction-sampled", L=L)))		
 	]
 end
 
@@ -125,13 +120,6 @@ This function edits the sampled parameters based on nature of data - e.g. dimens
 behaviour is doing nothing - then used `GroupAD.edit_params`.
 """ 
 function edit_params(data, parameters)
-	idim = size(data[1][1].data.data,1)
-	# put the largest possible zdim where zdim < idim, the model tends to converge poorly if the latent dim is larger than idim
-	if parameters.zdim >= idim
-		zdims = 2 .^(1:8)
-		zdim_new = zdims[zdims .< idim][end]
-		parameters = merge(parameters, (zdim=zdim_new,))
-	end
 	parameters
 end
 
@@ -139,27 +127,14 @@ end
 ################ THIS PART IS COMMON FOR ALL MODELS ################
 # only execute this if run directly - so it can be included in other files
 if abspath(PROGRAM_FILE) == @__FILE__
-	if in(dataset, mill_datasets)
-		GroupAD.basic_experimental_loop(
-			sample_params, 
-			fit, 
-			edit_params, 
-			max_seed, 
-			modelname, 
-			dataset, 
-			contamination, 
-			datadir("experiments/contamination-$(contamination)/MIL"),
+	GroupAD.basic_experimental_loop(
+		sample_params, 
+		fit, 
+		edit_params, 
+		max_seed, 
+		modelname, 
+		dataset,
+		contamination, 
+		datadir("experiments/contamination-$(contamination)/LHCO")
 		)
-	elseif in(dataset, mvtec_datasets)
-		GroupAD.basic_experimental_loop(
-			sample_params, 
-			fit, 
-			edit_params, 
-			max_seed, 
-			modelname, 
-			dataset, 
-			contamination, 
-			datadir("experiments/contamination-$(contamination)/mv_tec")
-		)
-	end
 end

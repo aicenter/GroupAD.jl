@@ -14,7 +14,7 @@ s = ArgParseSettings()
         arg_type = Int
         help = "seed"
     "dataset"
-        default = "Fox"
+        default = "events_anomalydetection_v2.h5"
         arg_type = String
         help = "dataset"
    "contamination"
@@ -94,28 +94,14 @@ edit_params = GroupAD.edit_params
 
 ####################################################################
 ################ THIS PART IS COMMON FOR ALL MODELS ################
-if abspath(PROGRAM_FILE) == @__FILE__
-	if in(dataset, mill_datasets)
-		GroupAD.basic_experimental_loop(
-			sample_params, 
-			fit, 
-			edit_params, 
-			max_seed, 
-			modelname, 
-			dataset, 
-			contamination, 
-			datadir("experiments/contamination-$(contamination)/MIL"),
-		)
-	elseif in(dataset, mvtec_datasets)
-		GroupAD.basic_experimental_loop(
-			sample_params, 
-			fit, 
-			edit_params, 
-			max_seed, 
-			modelname, 
-			dataset, 
-			contamination, 
-			datadir("experiments/contamination-$(contamination)/mv_tec")
-		)
-	end
-end
+
+GroupAD.basic_experimental_loop(
+    sample_params, 
+    fit, 
+    edit_params, 
+    max_seed, 
+    modelname, 
+	dataset,
+    contamination, 
+    datadir("experiments/contamination-$(contamination)/LHCO")
+)
