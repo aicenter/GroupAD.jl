@@ -20,6 +20,7 @@ data/experiments_mill_backup
 data/results
 data/sift_mvtec
 data/results/*
+data/mvtec*
 
 
 ################################################################################
