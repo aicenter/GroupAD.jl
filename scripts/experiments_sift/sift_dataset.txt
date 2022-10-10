@@ -1,0 +1,6 @@
+capsule
+hazelnut
+pill
+screw
+toothbrush
+transistor

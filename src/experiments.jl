@@ -7,6 +7,10 @@ Eval score function on test/val/train data and save.
 """
 function experiment(score_fun, parameters, data, savepath; verb=true, save_result=true, save_entries...)
 	tr_data, val_data, tst_data = data
+	# unpack data for easier manipulation
+	tr_data, tr_lab = GroupAD.Models.unpack_mill(tr_data)
+	val_data, val_lab = GroupAD.Models.unpack_mill(val_data)
+	tst_data, tst_lab = GroupAD.Models.unpack_mill(tst_data)
 
 	# extract scores
 	tr_scores, tr_eval_t, _, _, _ = @timed score_fun(tr_data[1])
@@ -48,7 +52,7 @@ function experiment_bag(score_fun, parameters, data, savepath; verb=true, save_r
 		experiment_likelihoods(score_fun, parameters, data, savepath; verb=verb, save_result=save_result, save_entries...)
 
 	# calculate the scores from reconstructed input
-	elseif parameters[:score] == "reconstructed_input"
+	elseif parameters[:score] in ["reconstructed_input", "input"]
 		experiment_reconstructed_input(score_fun, parameters, data, savepath; verb=verb, save_result=save_result, save_entries...)
 	end
 end
@@ -413,4 +417,77 @@ function basic_experimental_loop(sample_params_f, fit_f, edit_params_f,
 		end
 	end
 	(try_counter == max_tries) ? (@info "Reached $(max_tries) tries, giving up.") : nothing
+end
+
+function experimental_loop_gpu(sample_params_f, fit_f, edit_params_f, 
+	max_seed::Vector{Int}, modelname, dataset, contamination, savepath)
+	# this function is modified version of point_cloud_experimental_loop
+	# max_seed and anomaly_classes is expected to be list of Ints.
+	# gpu in name of function means just there is not threding and fit! funciton can be gpu based
+
+	try_counter = 0
+	max_tries = 10*length(max_seed)
+	while try_counter < max_tries
+		# sample the random hyperparameters
+		parameters = sample_params_f()
+		for seed in max_seed
+			_savepath = joinpath(savepath, "$(modelname)/$(dataset)/seed=$(seed)")
+			mkpath(_savepath)
+
+			# get data
+			@time data = load_data(dataset, seed=seed, contamination=contamination)
+			@info "Data loaded..."
+
+			#edit params
+			edited_parameters = edit_params_f(data, parameters)
+			
+			@info "Trying to fit $modelname on $(dataset).\nModel parameters: $(edited_parameters)..."
+			@info "Train/validation/test splits: $(size(data[1][1], 2)) | $(size(data[2][1], 2)) | $(size(data[3][1], 2))"
+			@info "Number of features: $(size(data[1][1], 1))"
+
+			# check if a combination of parameters and seed alread exists
+			if check_params(_savepath, edited_parameters)
+				@info "Params check done. Trying to fit."
+				# fit
+
+				training_info, results = fit_f(data, edited_parameters)
+				
+				# save the model separately			
+				if training_info.model !== nothing
+					modelf = joinpath(_savepath, savename("model", edited_parameters, "bson", digits=5))
+					tagsave(
+						modelf, 
+						Dict("model"=>training_info.model,
+							"fit_t"=>training_info.fit_t,
+							"history"=>training_info.history,
+							"parameters"=>edited_parameters
+							), 
+						safe = true)
+					(@info "Model saved to $modelf")
+
+					training_info = merge(training_info, (model = nothing, history=nothing))
+				end
+
+				# here define what additional info should be saved together with parameters, scores, labels and predict times
+				save_entries = merge(training_info, (modelname = modelname, seed = seed, dataset = dataset))
+
+				# now loop over all anomaly score funs
+				@time for result in results
+					if modelname in ["vae_instance", "statistician", "PoolModel"] # TODO try to move foldng net to experiments
+						experiment_bag(result..., data, _savepath; save_entries...)
+					elseif modelname in ["setvae_basic"]
+						experiment_reconstructed_input_batched(result..., data, _savepath; save_entries...)
+					else
+						@info "running experiment function in else statement"
+						experiment(result..., data, _savepath; save_entries...) # should work for setvae
+					end
+				end
+				try_counter = max_tries + 1
+			else
+				@info "Model already present, trying new hyperparameters..."
+				try_counter += 1
+			end
+		end
+	end
+	return (try_counter == max_tries) ? (@info "Reached $(max_tries) tries, giving up.") : nothing
 end

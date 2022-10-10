@@ -5,6 +5,7 @@
 # Folders to ignore - files may be too large, too many, etc. NOTE: EDIT IF NEEDED.
 data/experiments
 data/mnist_point_cloud
+images
 videos
 plots
 notebooks
@@ -13,7 +14,13 @@ log_files
 pbs_run
 .vscode
 scripts/test_setvae_fit.jl
-data/mvtec_anomaly_detection/
+data/mvtec
+helper_scripts
+data/experiments_mill_backup
+data/results
+data/sift_mvtec
+data/results/*
+
 
 ################################################################################
 #                                    Julia                                     #
@@ -420,3 +427,12 @@ $RECYCLE.BIN/
 
 ## Acknowledgements
 # Many thanks to `https://gitignore.io/`, written and maintained by Joe Blau, which contributed much material to this gitignore file.
+scripts/experiments_point_cloud/test.sh
+tst.png
+scripts/experiments_mill/test.txt
+scripts/experiments_mill/datasets_small.txt
+scripts/evaluation_/commands.txt
+data/mvtec_to_mill.jl
+data/results/MIL/mill_names_scores.bson
+data/results/MIL/mill_results_collection.bson
+data/results/MNIST/models/vae.bson
