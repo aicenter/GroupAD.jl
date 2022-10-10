@@ -13,6 +13,7 @@ log_files
 pbs_run
 .vscode
 scripts/test_setvae_fit.jl
+data/mvtec_anomaly_detection/
 
 ################################################################################
 #                                    Julia                                     #
