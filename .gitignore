@@ -437,3 +437,5 @@ data/mvtec_to_mill.jl
 data/results/MIL/mill_names_scores.bson
 data/results/MIL/mill_results_collection.bson
 data/results/MNIST/models/vae.bson
+src/models/torchmodels.jl
+scripts/plotting/sizes_and_labels.bson
