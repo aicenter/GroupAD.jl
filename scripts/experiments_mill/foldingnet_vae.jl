@@ -120,7 +120,7 @@ function fit(data, parameters)
 	@info "check pdim", parameters
 	# construct model - constructor should only accept kwargs 
 	model = GenerativeMIL.Models.foldingnet_constructor_from_named_tuple( 
-        ;idim=size(data[1][1],1), local_cov=false, skip=true, parameters...
+        ;idim=n_dim, local_cov=false, skip=true, parameters...
     ) # local covariance is not suitable for mil problems
 	# fit train data
 	# max. train time: 24 hours, over 10 CPU cores -> 2.4 hours of training for each model
@@ -128,7 +128,7 @@ function fit(data, parameters)
 	# training time is decreased automatically for less cores!
 	
 	try
-		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=24*3600/length(max_seed), 
+		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=(24-0.5)*3600/length(max_seed), 
 			patience=200, check_interval=10, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed

@@ -439,3 +439,7 @@ data/results/MIL/mill_results_collection.bson
 data/results/MNIST/models/vae.bson
 src/models/torchmodels.jl
 scripts/plotting/sizes_and_labels.bson
+scripts/evaluation_
+scripts/mpi_runs
+logs
+scripts/reevaluate
