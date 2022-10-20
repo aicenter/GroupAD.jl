@@ -436,3 +436,7 @@ data/mvtec_to_mill.jl
 data/results/MIL/mill_names_scores.bson
 data/results/MIL/mill_results_collection.bson
 data/results/MNIST/models/vae.bson
+scripts/evaluation_
+scripts/mpi_runs
+logs
+scripts/reevaluate

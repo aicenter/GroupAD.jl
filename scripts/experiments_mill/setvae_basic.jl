@@ -120,7 +120,7 @@ function fit(data, parameters)
 	# training time is decreased automatically for less cores!
 	
 	try
-		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=24*3600/length(max_seed), 
+		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=(24-0.5)*3600/length(max_seed), 
 			patience=50, check_interval=10, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed

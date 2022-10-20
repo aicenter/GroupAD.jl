@@ -13,22 +13,24 @@ function experiment(score_fun, parameters, data, savepath; verb=true, save_resul
 	tst_data, tst_lab = GroupAD.Models.unpack_mill(tst_data)
 
 	# extract scores
-	tr_scores, tr_eval_t, _, _, _ = @timed score_fun(tr_data[1])
-	val_scores, val_eval_t, _, _, _ = @timed score_fun(val_data[1])
-	tst_scores, tst_eval_t, _, _, _ = @timed score_fun(tst_data[1])
+	tr_scores, tr_eval_t, _, _, _ = @timed score_fun.(tr_data)
+	val_scores, val_eval_t, _, _, _ = @timed score_fun.(val_data)
+	tst_scores, tst_eval_t, _, _, _ = @timed score_fun.(tst_data)
 
+	score_names = "chamfer" # TODO make this more general
 	# now save the stuff
-	savef = joinpath(savepath, savename(parameters, "bson", digits=5))
+	#savef = joinpath(savepath, savename(parameters, "bson", digits=5))
+	savef = joinpath(savepath, savename(merge(parameters, (type = score_names,)), "bson", digits=5))
 	result = (
-		parameters = parameters,
+		parameters = merge(parameters, (type = score_names,)),
 		tr_scores = tr_scores,
-		tr_labels = tr_data[2], 
+		tr_labels = tr_lab, 
 		tr_eval_t = tr_eval_t,
 		val_scores = val_scores,
-		val_labels = val_data[2], 
+		val_labels = val_lab, 
 		val_eval_t = val_eval_t,
 		tst_scores = tst_scores,
-		tst_labels = tst_data[2], 
+		tst_labels = tst_lab, 
 		tst_eval_t = tst_eval_t
 		)
 	result = Dict{Symbol, Any}([sym=>val for (sym,val) in pairs(merge(result, save_entries))]) # this has to be a Dict 
