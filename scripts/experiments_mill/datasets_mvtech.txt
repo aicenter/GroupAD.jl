@@ -2,3 +2,4 @@ hazelnut_together
 pill_together
 screw_together
 toothbrush_together
+capsule_together

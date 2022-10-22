@@ -11,6 +11,7 @@ using Statistics
 
 # for generative models
 using DistributionsAD, Flux, GroupAD
+using Mill
 using GroupAD.GenerativeModels
 using ConditionalDists
 using ProgressMeter
@@ -63,25 +64,27 @@ chooses the best model (should be validation AUC or AUPRC).
 function findmaxs(gdf::GroupedDataFrame, metric::Symbol)
     res = []
 	# get parameter names for resulting dataframe
-    p_names = keys(gdf[1].parameters[1])
+    # p_names = keys(gdf[1].parameters[1])
 
     # decide on metric
     metric == :val_AUC ? test_metric = :test_AUC : test_metric = :test_AUPRC
 
     for g in gdf
+
 		# find the maximum value based on `metric`
         vauc, ix = findmax(g[:, metric])
         tauc = g[ix, test_metric]
+        p_names = keys(g.parameters[ix])
 
         # export parameters
         p = g.parameters[ix]
         pdf = DataFrame(keys(p) .=> values(p))
 
-        push!(res, [g.dataset[1] values(g.parameters[ix])... round(vauc, digits=3) round(tauc, digits=3)])       
+        push!(res, DataFrame([g.dataset[1] values(g.parameters[ix])... round(vauc, digits=3) round(tauc, digits=3)], [:dataset, p_names..., metric, test_metric]))
     end
 
 	# create a resulting dataframe
-	df = DataFrame(vcat(res...), [:dataset, p_names..., metric, test_metric])
+	df = vcat(res..., cols=:union)
     sort(df, :dataset)
 end
 
@@ -100,8 +103,6 @@ function collect_mill(model::String, mill_datasets=mill_datasets)
     len = length(mill_datasets)
     dfs = repeat([DataFrame()], len)
     Threads.@threads for i in 1:len
-        # _df = collect_results(datadir("experiments", "contamination-0.0", model, "MIL", mill_datasets[i]), subfolders=true)
-        # _df = collect_results(datadir("experiments", "contamination-0.0_old_data", model, mill_datasets[i]), subfolders=true)
         _df = collect_results(datadir("experiments", "contamination-0.0", "MIL", model, mill_datasets[i]), subfolders=true, rexclude=[r"model_.*"])
         dfs[i] = _df
     end
@@ -109,7 +110,23 @@ function collect_mill(model::String, mill_datasets=mill_datasets)
 end
 
 """
-    collect_mill(model::String, mill_datasets=mill_datasets)
+    collect_mill_old(model::String, mill_datasets=mill_datasets)
+
+Collects the results from all folders of MIL datasets using multi-threading.
+"""
+function collect_mill_old(model::String, mill_datasets=mill_datasets)
+    len = length(mill_datasets)
+    dfs = repeat([DataFrame()], len)
+    Threads.@threads for i in 1:len
+        _df = collect_results(datadir("experiments", "contamination-0.0_old_data", model, mill_datasets[i]), subfolders=true,  rexclude=[r"model_.*"])
+        # _df = collect_results(datadir("experiments", "contamination-0.0", "MIL", model, mill_datasets[i]), subfolders=true, rexclude=[r"model_.*"])
+        dfs[i] = _df
+    end
+    return vcat(dfs...)
+end
+
+"""
+    collect_lhco(model::String, mill_datasets=mill_datasets)
 
 Collects the results from LHCO using multi-threading.
 
@@ -144,10 +161,14 @@ Returns a grouped dataframe, where groups are dataset results aggregated over se
 
 Uses parallel processes for collecting results and calculating scores.
 """
-function calculate_results(model::String; dataset::String="MIL", metric::Symbol=:val_AUC, show=false, tf=tf_unicode, filter_fun=nothing, max_seed=10)
+function calculate_results(model::String; dataset::String="MIL", old=false, metric::Symbol=:val_AUC, show=false, tf=tf_unicode, filter_fun=nothing, max_seed=5)
     # load results collection
     if dataset == "MIL"
-        df = collect_mill(model)
+        if old
+            df = collect_mill_old(model)
+        else
+            df = collect_mill(model)
+        end
     elseif dataset == "LHCO"
         df = collect_lhco(model)
     elseif dataset == "mvtec"
@@ -203,9 +224,9 @@ for each MIL dataset. Returns a DataFrame with metrics, parameters and dataset n
 
 If `show=true`, prints a PrettyTable with the specified `tf` formatting.
 """
-function mill_model_results(model::String; metric::Symbol=:val_AUC, show=false, tf=tf_unicode, filter_fun=nothing)
+function mill_model_results(model::String; metric::Symbol=:val_AUC, old = false, show=false, tf=tf_unicode, filter_fun=nothing)
     # load results and create a grouped dataframe
-    g2 = calculate_results(model, dataset="MIL", metric=metric, show=show, tf=tf, filter_fun=filter_fun)
+    g2 = calculate_results(model, dataset="MIL", metric=metric, show=show, tf=tf, filter_fun=filter_fun, old=old)
     # find the best model based on metric (validation AUC)
     R = findmaxs(g2, metric)
 
@@ -254,18 +275,73 @@ function mvtec_model_results(model::String; metric::Symbol=:val_AUC, show=false,
     return R2, g2
 end
 
-function results_all_models(dataset::String; models = ["knn_basic", "vae_basic", "vae_instance", "statistician", "PoolModel"],
+function results_all_models(dataset::String; old=false, models = ["knn_basic", "vae_basic", "vae_instance", "statistician", "PoolModel"],
                             metric::Symbol=:val_AUC, show=false, tf=tf_unicode, filter_fun=nothing, max_seed=5)
     PT = []
 
     for model in models
-        g = calculate_results(model, dataset=dataset, metric=metric, show=show, tf=tf, filter_fun=filter_fun, max_seed=max_seed)
+        g = calculate_results(model, dataset=dataset, metric=metric, show=show, tf=tf, filter_fun=filter_fun, max_seed=max_seed, old=old)
         R = findmaxs(g, metric)
         c = ncol(R)
         R2 = R[:, vcat([1,c-1,c], setdiff(1:c, [1,c,c-1]))]
-        p = hcat(DataFrame(:modelname => model), R2)
+        p = hcat(DataFrame(:modelname => repeat([model], nrow(R2))), R2)
         push!(PT, p)
     end
 
     map(x -> pretty_table(x, nosubheader=true, tf=tf), PT)
+    return PT
 end
+
+
+### collect MIL results for given models
+
+modelnames = ["knn_basic", "vae_basic", "vae_instance_chamfer", "statistician_chamfer", "SMM", "SMMC"]
+PT = results_all_models("MIL"; models =  modelnames)
+fd = vcat(map(x -> x[:, [:modelname, :dataset, :test_AUC]], PT)...)
+
+
+
+PT_old = results_all_models("MIL"; old = true, models =  ["statistician", "vae_instance"])
+
+full_modelnames = ["knn_basic", "vae_basic", "vae_instance", "vae_instance_chamfer", "statistician", "statistician_chamfer", "SMM", "SMMC"]
+map(x -> x[:, [:dataset, :modelname, :test_AUC]], vcat(PT[1:2], PT_old[2], PT[3], PT_old[1], PT[4:end]))
+
+PTT = vcat(PT[1:2], PT_old[2], PT[3], PT_old[1], PT[4:end])
+results = DataFrame(
+    "dataset" => PT[1][!, :dataset],
+    map(i -> full_modelnames[i] => PTT[i][!, :test_AUC], 1:length(PTT))...
+)
+pretty_table(results, nosubheader=true)
+
+g = groupby(d, :dataset)
+for gr in g
+    println(gr.dataset[1])
+    gr2 = hcat(gr[:, Not(:parameters)], DataFrame(gr.parameters), makeunique=true)
+    gr3 = groupby(gr2, :na)
+    println(length(gr3))
+end
+
+hcat(gr[:, Not(:parameters)], DataFrame(gr.parameters), makeunique=true)
+dnew = hcat(df_results[:, Not(:parameters)], DataFrame(df_results.parameters), makeunique=true)[:, Not(:seed_1)]
+
+df_results.parameters[1]
+p = [:mdim, :activation, :aggregation, :nlayers, :na, :score, :dataset]
+cdf = combine(groupby(dnew, p), ["val_AUC", "val_AUPRC", "test_AUC", "test_AUPRC"] .=> mean, :dataset => unique, renamecols=false)
+
+sort!(cdf, :val_AUC, rev=true)
+cdf2 = filter(:na => x -> x != 100, cdf)
+
+grrr = groupby(cdf2, [:dataset, :na])
+
+f = []
+for gr in grrr
+    push!(f, DataFrame(gr[1,:]))
+end
+
+f = vcat(f...)
+sort!(f, [:dataset, :na])
+
+map(x -> pretty_table(x), groupby(f, :dataset))
+pretty_table.(groupby(f, :dataset))
+
+foreach(x -> pretty_table(x), groupby(f, :dataset))
