@@ -116,7 +116,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 			datadir("experiments/contamination-$(contamination)/MIL"),
 		)
 	elseif in(dataset, mvtec_datasets)
-		GroupAD.hmil_basic_loop(
+		GroupAD.Models.hmil_basic_loop(
 			sample_params, 
 			fit, 
 			edit_params, 

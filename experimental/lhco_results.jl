@@ -292,56 +292,74 @@ function results_all_models(dataset::String; old=false, models = ["knn_basic", "
     return PT
 end
 
+function hmil_na_results()
+    df = collect_mill("hmil_classifier")
+    dff = filter(:tr_labels => x -> typeof(x) <: AbstractVector, df)
+
+    # filter!(:score => x -> x == "normal_prob", dff)
+    # dff.tr_labels = map(x -> Int.(x), dff.tr_labels)
+    # dff.val_labels = map(x -> Int.(x), dff.val_labels)
+    # dff.tst_labels = map(x -> Int.(x), dff.tst_labels)
+
+    filter!(:parameters => x -> x.na != 0, dff)
+
+    # preallocate and calculate metrics
+    n = nrow(dff)
+    metrics = zeros(n, 4)
+    p = Progress(n, 1)
+    Threads.@threads for i in 1:n
+        row = dff[i,:]
+        metrics[i, :] .= compute_stats(row)
+        next!(p)
+    end
+
+    # add metrics to a dataframe
+    res_df = DataFrame(["val_AUC", "val_AUPRC", "test_AUC", "test_AUPRC"] .=> eachcol(metrics))
+
+    # create results dataframe
+    df_results = dff[:, [:dataset, :parameters, :seed]]
+    df_results = hcat(df_results, res_df)
+
+    # prepare the combination over seeds
+    df_results.parameters[1]
+    p = [:mdim, :activation, :aggregation, :nlayers, :na, :score, :dataset]
+    dnew = hcat(df_results[:, Not(:parameters)], DataFrame(df_results.parameters), makeunique=true)
+    cdf = combine(groupby(dnew, p), ["val_AUC", "val_AUPRC", "test_AUC", "test_AUPRC"] .=> mean, :dataset => unique, renamecols=false)
+
+    # sort based on validation AUC
+    sort!(cdf, :val_AUC, rev=true)
+
+    grrr = groupby(cdf, [:dataset, :na])
+
+    # pick the best inside the (:dataset, :na) group
+    f = []
+    for gr in grrr
+        push!(f, DataFrame(gr[1,:]))
+    end
+    f = vcat(f...)
+    sort!(f, [:dataset, :na])
+
+    # print the resulting tables
+    foreach(x -> (println("\n", x.dataset[1]); pretty_table(x, crop=:none)), groupby(f, :dataset))
+    
+    return f
+end
+
 
 ### collect MIL results for given models
 
-modelnames = ["knn_basic", "vae_basic", "vae_instance_chamfer", "statistician_chamfer", "SMM", "SMMC"]
-PT = results_all_models("MIL"; models =  modelnames)
-fd = vcat(map(x -> x[:, [:modelname, :dataset, :test_AUC]], PT)...)
+# modelnames = ["knn_basic", "vae_basic", "vae_instance_chamfer", "statistician_chamfer", "SMM", "SMMC"]
+# PT = results_all_models("MIL"; models =  modelnames)
+# fd = vcat(map(x -> x[:, [:modelname, :dataset, :test_AUC]], PT)...)
 
+# PT_old = results_all_models("MIL"; old = true, models =  ["statistician", "vae_instance"])
 
+# full_modelnames = ["knn_basic", "vae_basic", "vae_instance", "vae_instance_chamfer", "statistician", "statistician_chamfer", "SMM", "SMMC"]
+# map(x -> x[:, [:dataset, :modelname, :test_AUC]], vcat(PT[1:2], PT_old[2], PT[3], PT_old[1], PT[4:end]))
 
-PT_old = results_all_models("MIL"; old = true, models =  ["statistician", "vae_instance"])
-
-full_modelnames = ["knn_basic", "vae_basic", "vae_instance", "vae_instance_chamfer", "statistician", "statistician_chamfer", "SMM", "SMMC"]
-map(x -> x[:, [:dataset, :modelname, :test_AUC]], vcat(PT[1:2], PT_old[2], PT[3], PT_old[1], PT[4:end]))
-
-PTT = vcat(PT[1:2], PT_old[2], PT[3], PT_old[1], PT[4:end])
-results = DataFrame(
-    "dataset" => PT[1][!, :dataset],
-    map(i -> full_modelnames[i] => PTT[i][!, :test_AUC], 1:length(PTT))...
-)
-pretty_table(results, nosubheader=true)
-
-g = groupby(d, :dataset)
-for gr in g
-    println(gr.dataset[1])
-    gr2 = hcat(gr[:, Not(:parameters)], DataFrame(gr.parameters), makeunique=true)
-    gr3 = groupby(gr2, :na)
-    println(length(gr3))
-end
-
-hcat(gr[:, Not(:parameters)], DataFrame(gr.parameters), makeunique=true)
-dnew = hcat(df_results[:, Not(:parameters)], DataFrame(df_results.parameters), makeunique=true)[:, Not(:seed_1)]
-
-df_results.parameters[1]
-p = [:mdim, :activation, :aggregation, :nlayers, :na, :score, :dataset]
-cdf = combine(groupby(dnew, p), ["val_AUC", "val_AUPRC", "test_AUC", "test_AUPRC"] .=> mean, :dataset => unique, renamecols=false)
-
-sort!(cdf, :val_AUC, rev=true)
-cdf2 = filter(:na => x -> x != 100, cdf)
-
-grrr = groupby(cdf2, [:dataset, :na])
-
-f = []
-for gr in grrr
-    push!(f, DataFrame(gr[1,:]))
-end
-
-f = vcat(f...)
-sort!(f, [:dataset, :na])
-
-map(x -> pretty_table(x), groupby(f, :dataset))
-pretty_table.(groupby(f, :dataset))
-
-foreach(x -> pretty_table(x), groupby(f, :dataset))
+# PTT = vcat(PT[1:2], PT_old[2], PT[3], PT_old[1], PT[4:end])
+# results = DataFrame(
+#     "dataset" => PT[1][!, :dataset],
+#     map(i -> full_modelnames[i] => PTT[i][!, :test_AUC], 1:length(PTT))...
+# )
+# pretty_table(results, nosubheader=true)

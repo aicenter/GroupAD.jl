@@ -71,14 +71,15 @@ function classification_data(data, na, seed)
 	if na == 0
 		# both train and validation data only contain normal samples
 		train_data = tr_x
-		train_labels = Flux.onehotbatch(tr_l, [0,1])
+		train_labels = tr_l # Flux.onehotbatch(tr_l, [0,1])
 		val_data = GroupAD.reindex(val_x, val_l .== 0)
 		# val_labels = Flux.onehotbatch(val_l[val_l .== 0], [0,1])
 		val_labels = val_l[val_l .== 0]
 		@info "There are $(sum(val_labels)) anomalies in validation data."
     elseif na == 100
 		# case for all anomalies in validation
-		# half of anomalies goes to train, half to validation sets
+
+		# get all validation
         an_data = GroupAD.reindex(val_x, val_l .== 1)
         an_labels = val_l[val_l .== 1]
 		l_an = length(an_labels)
@@ -226,7 +227,8 @@ function hmil_basic_loop(sample_params_f, fit_f, edit_params_f,
 	# sample the random hyperparameters
 	parameters = sample_params_f()
 
-	for na in [0,10,20,100]
+	for na in 100#[100,0,10,20]
+	# for na in 0
 		# with these hyperparameters, train and evaluate the model on different train/val/tst splits
 		for seed in 1:max_seed
 			# define where data is going to be saved

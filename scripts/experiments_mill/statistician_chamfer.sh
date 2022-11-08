@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --partition=cpulong
-#SBATCH --time=35:00:00
+#SBATCH --time=48:00:00
 #SBATCH --nodes=1 --ntasks-per-node=2 --cpus-per-task=1
-#SBATCH --mem=20G
+#SBATCH --mem=30G
 
 MAX_SEED=$1
 DATASET=$2
