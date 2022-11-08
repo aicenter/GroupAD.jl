@@ -12,9 +12,9 @@ using DataDeps
 using Mmap
 using Distributions
 using HDF5
-if occursin("Python/3.8.6-GCCcore-10.2.0", read(`which python`, String))
-    using PyCall
-end
+# if occursin("Python/3.8.6-GCCcore-10.2.0", read(`which python`, String))
+#     using PyCall
+# end
 
 export GenerativeModels
 

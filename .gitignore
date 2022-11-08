@@ -5,6 +5,7 @@
 # Folders to ignore - files may be too large, too many, etc. NOTE: EDIT IF NEEDED.
 data/experiments
 data/mnist_point_cloud
+data/sift_mvtec
 videos
 plots
 notebooks

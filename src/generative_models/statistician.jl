@@ -96,6 +96,26 @@ function elbo(m::NeuralStatistician, x::AbstractArray;β1=1.0,β2=1.0)
     llh - β1 * kld1 - β2 * kld2
 end
 
+function chamfer_elbo(m::NeuralStatistician, x::AbstractArray;β1=1.0,β2=1.0)
+    # instance network
+    v = m.instance_encoder(x)
+    p = mean(v, dims=2)
+
+    # sample latent for context
+    c = rand(m.encoder_c, p)
+
+    # sample latent for instances
+    h = hcat([vcat(v[1:end,i], c) for i in 1:size(v, 2)]...)
+    z = rand(m.encoder_z, h)
+	
+    # 3 terms - chamfer recostruction error, kl1, kl2
+    ch = chamfer_distance(x, rand(m.decoder, z))
+    kld1 = mean(kl_divergence(condition(m.encoder_c, v), m.prior_c))
+    kld2 = mean(kl_divergence(condition(m.encoder_z, h), condition(m.conditional_z, c)))
+    ch - β1 * kld1 - β2 * kld2
+end
+
+
 function Base.show(io::IO, m::NeuralStatistician)
     IE = repr(m.instance_encoder)
     IE = sizeof(IE) > 70 ? "($(IE[1:70 - 3])...)" : IE

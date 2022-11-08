@@ -22,5 +22,6 @@ include("PoolModel.jl")
 include("SMM_empirical.jl")
 # include("SMMC.jl")
 include("bagkNN.jl")
+include("hmil.jl")
 
 end # module
