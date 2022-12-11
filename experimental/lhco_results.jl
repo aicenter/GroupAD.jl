@@ -202,7 +202,7 @@ function calculate_results(model::String; dataset::String="MIL", old=false, metr
     # groupby parameters and dataset to average over seeds
     g = groupby(df_results, [:parameters, :dataset])
 
-    # filter out groups with less than 10 seeds
+    # filter out groups with less than max_seed seeds
     k = length(g)
     b = map(i -> nrow(g[i]) >= max_seed, 1:k)
     g = g[b]
@@ -363,3 +363,15 @@ end
 #     map(i -> full_modelnames[i] => PTT[i][!, :test_AUC], 1:length(PTT))...
 # )
 # pretty_table(results, nosubheader=true)
+
+knn = mvtec_model_results("knn_basic", show=true);
+vaeb = mvtec_model_results("vae_basic", show=true);
+vaei = mvtec_model_results("vae_instance", show=true);
+ns = mvtec_model_results("statistician", show=true);
+pm = mvtec_model_results("PoolModel", show=true);
+
+pretty_table(knn[1])
+pretty_table(vaeb[1])
+pretty_table(vaei[1])
+pretty_table(ns[1])
+pretty_table(pm[1])

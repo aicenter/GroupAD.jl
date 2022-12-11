@@ -310,7 +310,7 @@ function load_sift(filename::String="capsule_together")
 end
 
 function load_mvtec(dataset::String="capsule_together")
-	data, labels, bagids = load_sift()
+	data, labels, bagids = load_sift(dataset)
 	idxes = Mill.length2bags([sum(bagids .== c) for c in sort(unique(bagids))])
 	bags = Mill.BagNode(Mill.ArrayNode(data), idxes)
 
