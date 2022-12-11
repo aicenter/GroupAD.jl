@@ -17,7 +17,7 @@ fi
 
 while read d; do
 	# submit to slurm
-    for na in 0 10 20 100
+    for na in 10 20 100
     do
         sbatch \
         --array=1-${NUM_SAMPLES}%${NUM_CONC} \
