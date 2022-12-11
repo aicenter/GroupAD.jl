@@ -276,6 +276,74 @@ function hmil_basic_loop(sample_params_f, fit_f, edit_params_f,
 	end
 end
 
+function hmil_pc_loop(sample_params_f, fit_f, edit_params_f, 
+	max_seed, modelname, dataset, contamination, savepath, anomaly_classes, method)
+
+	# sample the random hyperparameters
+	parameters = sample_params_f()
+
+	for na in [100,10,20]
+		# run over all classes with the same hyperparameters
+		# use more CPU cores for calculation
+		@info "Starting parallel process on $(Threads.nthreads()) cores (over $max_seed seeds)."
+		Threads.@threads for seed in 1:max_seed
+			# with these hyperparameters, train and evaluate the model on different train/val/tst splits
+			# load data for either "MNIST_in" or "MNIST_out" and set the setting
+			# prepared for other point cloud datasets such as ModelNet10
+			for class in 1:anomaly_classes
+				data = load_data(dataset, anomaly_class_ind=class, seed=seed, method=method, contamination=contamination)
+				if method == "leave-one-in"
+					data = GroupAD.leave_one_in(data; seed=seed)
+				elseif method == "leave-one-out"
+					data = GroupAD.leave_one_out(data; seed=seed)
+				else
+					error("This model can only run on point cloud datasets!")
+				end
+				
+				# define where data is going to be saved
+				# _savepath = joinpath(savepath, "$(modelname)/$(dataset)/$(method)/class_index=$(class)/seed=$(seed)")
+				_savepath = joinpath(savepath, "$(modelname)/$(method)/class_index=$(class)/seed=$(seed)")
+				mkpath(_savepath)
+				
+				# edit parameters
+				edited_parameters = edit_params_f(data, merge(parameters, (na=na, )), class, method)
+				
+				@info "Trying to fit $modelname on $(dataset) in $method setting.\nModel parameters: $(edited_parameters)..."
+				@info "Train/validation/test splits: $(size(data[1][1], 2)) | $(size(data[2][1], 2)) | $(size(data[3][1], 2))"
+				@info "Number of features: $(size(data[1][1], 1))"
+
+				# fit
+				training_info, results, data = fit_f(data, edited_parameters, seed)
+
+				# save the model separately			
+				if training_info.model != nothing
+					modelf = joinpath(_savepath, savename("model", edited_parameters, "bson", digits=5))
+					tagsave(
+						modelf, 
+						Dict("model"=>training_info.model,
+							"fit_t"=>training_info.fit_t,
+							"history"=>training_info.history,
+							"parameters"=>edited_parameters
+							), 
+						safe = true)
+					(@info "Model saved to $modelf")
+
+					training_info = merge(training_info, (model = nothing, history=nothing))
+				end
+
+				# here define what additional info should be saved together with parameters, scores, labels and predict times
+				save_entries = merge(training_info, (modelname = modelname, seed = seed, dataset = dataset))
+
+				# now loop over all anomaly score funs
+				for result in results
+					experiment(result..., data, _savepath; save_entries...)
+				end
+			end
+		end
+	end
+end
+
+
 function score_hmil(model, x)
     model(x)[2, :]
 end
