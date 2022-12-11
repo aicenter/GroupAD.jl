@@ -227,7 +227,7 @@ function hmil_basic_loop(sample_params_f, fit_f, edit_params_f,
 	# sample the random hyperparameters
 	parameters = sample_params_f()
 
-	for na in 100#[100,0,10,20]
+	for na in [100,10,20]
 	# for na in 0
 		# with these hyperparameters, train and evaluate the model on different train/val/tst splits
 		for seed in 1:max_seed
