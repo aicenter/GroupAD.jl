@@ -343,7 +343,6 @@ function hmil_pc_loop(sample_params_f, fit_f, edit_params_f,
 	end
 end
 
-
 function score_hmil(model, x)
     model(x)[2, :]
 end
