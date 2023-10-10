@@ -153,6 +153,17 @@ function collect_mvtec(model::String, datasets=mvtec_datasets)
     return vcat(dfs...)
 end
 
+function collect_modelnet(model::String, datasets=["bathtub", "bed", "chair", "desk", "dresser", "monitor", "night_stand", "sofa", "table", "toilet"])
+    len = length(datasets)
+    dfs = repeat([DataFrame()], len)
+    Threads.@threads for i in 1:len
+        _df = collect_results(datadir("experiments", "contamination-0.0", "modelnet", model, datasets[i]), subfolders=true, rexclude=[r"model_.*"])
+        _df[:, :dataset] .= datasets[i]
+        dfs[i] = _df
+    end
+    return vcat(dfs...)
+end
+
 """
     calculate_results(model::String; dataset::String="MIL", metric::Symbol=:val_AUC, show=false, tf=tf_unicode, filter_fun=nothing, max_seed=10)
 
@@ -292,8 +303,13 @@ function results_all_models(dataset::String; old=false, models = ["knn_basic", "
     return PT
 end
 
-function hmil_na_results()
-    df = collect_mill("hmil_classifier")
+function hmil_na_results(dataset="modelnet")
+    if dataset == "modelnet"
+        df = collect_modelnet("hmil_classifier")
+    elseif dataset == "MIL"
+        df = collect_mill("hmil_classifier")
+    end
+    
     dff = filter(:tr_labels => x -> typeof(x) <: AbstractVector, df)
 
     # filter!(:score => x -> x == "normal_prob", dff)
