@@ -18,13 +18,24 @@ data = GroupAD.load_data("Fox")
 ```
 4. Running a single experiment of VAE with 5-fold crossvalidation on the Tiger dataset.
 ```bash
-cd scripts/experiments
+cd scripts/experiments_mill
 julia vae_basic.jl 5 Tiger
 ```
 5. You can quickly evaluate the results using this recursive script.
 ```bash
 julia GroupAD.jl/scripts/evaluate_performance_single.jl path/to/results
 ```
+
+## Project structure
+
+Source files can be found in `src`. There are multiple modules used for utilities, and the model implementations and be found here.
+
+Since every experiments is a little bit different, each group has its own experimental folder in the `scripts` folder:
+- MIL datasets
+- LHCO dataset
+- point cloud datasets (MNIST, ModelNet10)
+
+Each model has its own run script and bash script to submit to the cluster. Scripts for submitting experiments to run in parallel are also present. Always submit the run script from its script folder.
 
 ## Running experiments on the RCI cluster
 
