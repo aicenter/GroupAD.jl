@@ -1,5 +1,3 @@
-using Pkg
-Pkg.activate(split(pwd(), ".jl")[1]*".jl")
 using DrWatson
 @quickactivate
 using ArgParse
@@ -22,7 +20,7 @@ s = ArgParseSettings()
         help = "dataset"
 	"anomaly_classes"
 		arg_type = Int
-		default = 10
+		default = 1
 		help = "number of anomaly classes"
 	"method"
 		default = "leave-one-out"
@@ -94,7 +92,7 @@ function fit(data, parameters)
 	# training time is decreased automatically for less cores!
 	try
 		cores = Threads.nthreads()
-		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=24*3600*cores/max_seed/anomaly_classes, 
+		global info, fit_t, _, _, _ = @timed fit!(model, data, loss; max_train_time=23*3600*cores/max_seed/anomaly_classes, 
 			patience=200, check_interval=10, parameters...)
 	catch e
 		# return an empty array if fit fails so nothing is computed
@@ -151,16 +149,31 @@ end
 ################ THIS PART IS COMMON FOR ALL MODELS ################
 # only execute this if run directly - so it can be included in other files
 if abspath(PROGRAM_FILE) == @__FILE__
-	GroupAD.point_cloud_experimental_loop(
-		sample_params, 
-		fit, 
-		edit_params, 
-		max_seed, 
-		modelname, 
-		dataset, 
-		contamination, 
-		datadir("experiments/contamination-$(contamination)"),
-		anomaly_classes,
-        method
+	if dataset == "MNIST"
+		GroupAD.point_cloud_experimental_loop(
+			sample_params, 
+			fit, 
+			edit_params, 
+			max_seed, 
+			modelname, 
+			dataset, 
+			contamination, 
+			datadir("experiments/contamination-$(contamination)/MNIST"),
+			anomaly_classes,
+			method
 		)
+	elseif dataset == "modelnet"
+		GroupAD.point_cloud_experimental_loop(
+			sample_params, 
+			fit, 
+			edit_params, 
+			max_seed, 
+			modelname, 
+			dataset, 
+			contamination, 
+			datadir("experiments/contamination-$(contamination)/modelnet"),
+			anomaly_classes,
+			method
+		)
+	end
 end

@@ -11,6 +11,10 @@ using ValueHistories
 using MLDataPattern: RandomBatches
 using Random
 
+# dataset = "modelnet"
+# method = "chair"
+# data = GroupAD.load_data(dataset, method=method)
+
 s = ArgParseSettings()
 @add_arg_table! s begin
    "max_seed"
@@ -23,10 +27,10 @@ s = ArgParseSettings()
         help = "dataset"
 	"anomaly_classes"
 		arg_type = Int
-		default = 10
+		default = 1
 		help = "number of anomaly classes"
 	"method"
-		default = "leave-one-out"
+		default = "leave-one-in"
 		arg_type = String
 		help = "method for data creation -> \"leave-one-out\" or \"leave-one-in\" "
    "contamination"
@@ -52,7 +56,8 @@ function sample_params()
     return (mdim=mdim, activation=activation, aggregation=aggregation, nlayers=nlayers)
 end
 
-loss(model, x, y) = Flux.logitcrossentropy(model(x), y)
+loss(model, x, y) = Flux.crossentropy(model(x), y)
+# loss(model, x, y) = Flux.logitcrossentropy(model(x), y)
 
 """
 	fit(data, parameters)
@@ -70,7 +75,7 @@ function fit(data, parameters, seed)
 	# fit train data
 	# max. train time: 24 hours
 	try
-		global _info, fit_t, _, _, _ = @timed GroupAD.Models.fit_hmil!(model, data, loss; max_train_time=23*3600/max_seed/4, 
+		global _info, fit_t, _, _, _ = @timed GroupAD.Models.fit_hmil!(model, data, loss; max_train_time=22*3600/max_seed/3, 
 			patience=200, check_interval=5, seed=seed, parameters...)
 		global info = _info[1]
 		global new_data = (_info[2], _info[3], data[3])
@@ -112,14 +117,31 @@ end
 ################ THIS PART IS COMMON FOR ALL MODELS ################
 # only execute this if run directly - so it can be included in other files
 if abspath(PROGRAM_FILE) == @__FILE__
-	GroupAD.Models.hmil_basic_loop(
-		sample_params, 
-		fit, 
-		edit_params, 
-		max_seed, 
-		modelname, 
-		dataset, 
-		contamination, 
-		datadir("experiments/contamination-$(contamination)/MNIST"),
-	)
+	if dataset == "MNIST"
+		GroupAD.Models.hmil_pc_loop(
+			sample_params, 
+			fit, 
+			edit_params, 
+			max_seed, 
+			modelname, 
+			dataset, 
+			contamination, 
+			datadir("experiments/contamination-$(contamination)/MNIST"),
+			anomaly_classes,
+			method
+		)
+	elseif dataset == "modelnet"
+		GroupAD.Models.hmil_pc_loop(
+			sample_params, 
+			fit, 
+			edit_params, 
+			max_seed, 
+			modelname, 
+			dataset, 
+			contamination, 
+			datadir("experiments/contamination-$(contamination)/modelnet"),
+			anomaly_classes,
+			method
+		)
+	end
 end

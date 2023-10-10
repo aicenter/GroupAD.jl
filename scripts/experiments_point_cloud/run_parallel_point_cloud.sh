@@ -22,7 +22,7 @@ while read d; do
     sbatch \
     --array=1-${NUM_SAMPLES}%${NUM_CONC} \
     --output="${LOG_DIR}/${d}-%A_%a.out" \
-     ./${MODEL}.sh $MAX_SEED ${DATASET_FILE} 10 $METHOD $CONTAMINATION
+     ./${MODEL}.sh $MAX_SEED ${DATASET_FILE} 1 $METHOD $CONTAMINATION
 
     # for local testing    
     # ./${MODEL}_run.sh $MAX_SEED $d

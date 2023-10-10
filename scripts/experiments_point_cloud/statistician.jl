@@ -1,5 +1,3 @@
-using Pkg
-Pkg.activate(split(pwd(), ".jl")[1]*".jl")
 using DrWatson
 @quickactivate
 using ArgParse
@@ -23,7 +21,7 @@ s = ArgParseSettings()
         help = "dataset"
 	"anomaly_classes"
 		arg_type = Int
-		default = 10
+		default = 1
 		help = "number of anomaly classes"
 	"method"
 		default = "leave-one-out"
@@ -74,7 +72,8 @@ end
 
 Negative ELBO for training of a Neural Statistician model.
 """
-loss(model::GenerativeModels.NeuralStatistician,x) = -GroupAD.Models.elbo1(model, x)
+# loss(model::GenerativeModels.NeuralStatistician,x) = -GroupAD.Models.elbo1(model, x)
+loss(model::GenerativeModels.NeuralStatistician, batch) = mean(x -> -GroupAD.Models.elbo1(model, x), batch)
 
 """
 	fit(data, parameters)
@@ -142,16 +141,31 @@ end
 ################ THIS PART IS COMMON FOR ALL MODELS ################
 # only execute this if run directly - so it can be included in other files
 if abspath(PROGRAM_FILE) == @__FILE__
-	GroupAD.point_cloud_experimental_loop(
-		sample_params, 
-		fit, 
-		edit_params, 
-		max_seed, 
-		modelname, 
-		dataset, 
-		contamination, 
-		datadir("experiments/contamination-$(contamination)"),
-		anomaly_classes,
-        method
+	if dataset == "MNIST"
+		GroupAD.point_cloud_experimental_loop(
+			sample_params, 
+			fit, 
+			edit_params, 
+			max_seed, 
+			modelname, 
+			dataset, 
+			contamination, 
+			datadir("experiments/contamination-$(contamination)/MNIST"),
+			anomaly_classes,
+			method
 		)
+	elseif dataset == "modelnet"
+		GroupAD.point_cloud_experimental_loop(
+			sample_params, 
+			fit, 
+			edit_params, 
+			max_seed, 
+			modelname, 
+			dataset, 
+			contamination, 
+			datadir("experiments/contamination-$(contamination)/modelnet"),
+			anomaly_classes,
+			method
+		)
+	end
 end
