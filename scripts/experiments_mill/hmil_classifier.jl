@@ -45,7 +45,8 @@ function sample_params()
     return (mdim=mdim, activation=activation, aggregation=aggregation, nlayers=nlayers)
 end
 
-loss(model, x, y) = Flux.logitcrossentropy(model(x), y)
+loss(model, x, y) = Flux.crossentropy(model(x), y)
+# loss(model, x, y) = Flux.logitcrossentropy(model(x), y)
 
 """
 	fit(data, parameters)
