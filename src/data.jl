@@ -543,6 +543,8 @@ function load_data(dataset::String, ratios=(0.6,0.2,0.2); seed=nothing, method =
 		data_normal, data_anomalous = load_lhco(dataset; kwargs...)
 	elseif dataset in mvtec_datasets
 		data_normal, data_anomalous = load_mvtec(dataset; kwargs...)
+	elseif dataset == "modelnet"
+		return load_modelnet(;kwargs...)
 	else
 		data_normal, data_anomalous = load_mill_data(dataset; kwargs...)
 	end

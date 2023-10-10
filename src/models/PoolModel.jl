@@ -23,12 +23,10 @@ transformation of all instances, the latter only transforms the one-vector summa
 The summary is created with a pooling function which has to be permutation invariant.
 Possible functions include: mean, sum, maximum, etc.
 """
-struct PoolModel{pre <: Chain, post <: Chain, fun <: Function, p <: ContinuousMultivariateDistribution, e <: ConditionalMvNormal, g <: ConditionalMvNormal, d <: Chain}
+struct PoolModel{pre <: Chain, post <: Chain, fun <: Function, g <: ConditionalMvNormal, d <: Chain}
     prepool_net::pre
     postpool_net::post
     poolf::fun
-    prior::p
-    encoder::e
     generator::g
     decoder::d
 end
@@ -36,15 +34,19 @@ end
 Flux.@functor PoolModel
 
 function Flux.trainable(m::PoolModel)
-    (prepool_net = m.prepool_net, postpool_net = m.postpool_net, encoder = m.encoder, generator = m.generator, decoder = m.decoder)
+    (prepool_net = m.prepool_net, postpool_net = m.postpool_net, generator = m.generator, decoder = m.decoder)
 end
 
-function PoolModel(pre, post, fun, gen, dec, enc::ConditionalMvNormal, plength::Int)
-    W = first(Flux.params(enc))
-    μ = fill!(similar(W, plength), 0)
-    σ = fill!(similar(W, plength), 1)
-    prior = DistributionsAD.TuringMvNormal(μ, σ)
-    PoolModel(pre, post, fun, prior, enc, gen, dec)
+# function PoolModel(pre, post, fun, gen, dec)
+#     PoolModel(pre, post, fun, gen, dec)
+# end
+
+function (m::PoolModel)(x)
+    v = m.prepool_net(x)
+    p = m.poolf(v)
+    p_post = m.postpool_net(p)
+    z = hcat([rand(m.generator, p_post) for i in 1:size(x, 2)]...)
+    m.decoder(z)
 end
 
 function Base.show(io::IO, pm::PoolModel)
@@ -88,25 +90,12 @@ function pm_constructor(;idim, hdim, predim, postdim, edim, activation="swish", 
     )
     
     if var == "scalar"
-    # encoder
-        enc = Chain(
-            build_mlp(postdim,hdim,hdim,nlayers-1,activation=activation)...,
-            SplitLayer(hdim,[edim,1])
-        )
-        enc_dist = ConditionalMvNormal(enc)
-
         gen = Chain(
             build_mlp(postdim,hdim,hdim,nlayers-1,activation=activation)...,
             SplitLayer(hdim,[edim,1])
         )
         gen_dist = ConditionalMvNormal(gen)
     else
-        enc = Chain(
-            build_mlp(postdim,hdim,hdim,nlayers-1,activation=activation)...,
-            SplitLayer(hdim,[edim,edim])
-        )
-        enc_dist = ConditionalMvNormal(enc)
-
         gen = Chain(
             build_mlp(postdim,hdim,hdim,nlayers-1,activation=activation)...,
             SplitLayer(hdim,[edim,edim])
@@ -119,7 +108,7 @@ function pm_constructor(;idim, hdim, predim, postdim, edim, activation="swish", 
         Dense(hdim,idim)
     )
 
-    pm = PoolModel(pre, post, fun, gen_dist, dec, enc_dist, edim)
+    pm = PoolModel(pre, post, fun, gen_dist, dec)
     return pm
 end
 
@@ -229,7 +218,8 @@ function StatsBase.fit!(model::PoolModel, data::Tuple, loss::Function;
 	for batch in RandomBatches(tr_x, 10)
 		# classic training
 		bag_batch = RandomBagBatches(tr_x,batchsize=batchsize,randomize=true)
-		Flux.train!(lossf, ps, [bag_batch], opt)
+		# Flux.train!(lossf, ps, [bag_batch], opt)
+        Flux.train!(lossf, ps, bag_batch, opt)
 		# only batch training loss
 		batch_loss = lossf(bag_batch) # mean(lossf.(bag_batch))
 

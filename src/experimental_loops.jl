@@ -174,13 +174,19 @@ function point_cloud_experimental_loop(sample_params_f, fit_f, edit_params_f,
 					data = GroupAD.leave_one_in(data; seed=seed)
 				elseif method == "leave-one-out"
 					data = GroupAD.leave_one_out(data; seed=seed)
+				elseif dataset == "modelnet"
+					nothing
 				else
 					error("This model can only run on point cloud datasets!")
 				end
 				
 				# define where data is going to be saved
 				# _savepath = joinpath(savepath, "$(modelname)/$(dataset)/$(method)/class_index=$(class)/seed=$(seed)")
-				_savepath = joinpath(savepath, "$(modelname)/$(method)/class_index=$(class)/seed=$(seed)")
+				if dataset == "modelnet"
+					_savepath = joinpath(savepath, "$(modelname)/$(method)/seed=$(seed)")
+				else
+					_savepath = joinpath(savepath, "$(modelname)/$(method)/class_index=$(class)/seed=$(seed)")
+				end
 				mkpath(_savepath)
 				
 				# edit parameters
@@ -235,90 +241,6 @@ function point_cloud_experimental_loop(sample_params_f, fit_f, edit_params_f,
 	end
 	(try_counter == max_tries) ? (@info "Reached $(max_tries) tries, giving up.") : nothing
 end
-
-"""
-	point_cloud_experimental_loop(sample_params_f, fit_f, edit_params_f, 
-		max_seed, modelname, dataset, contamination, savepath, anomaly_classes, method)
-
-This function takes a function that samples parameters, a fit function and a function that edits the sampled
-parameters and other parameters. Then it loads data, samples hyperparameters, calls the fit function
-that is supposed to construct and fit a model and finally evaluates the returned score functions on 
-the loaded data.
-
-This function works for point cloud datasets. Differentiation between leave-one-in and leave-one-out
-setting is done via parameter `method`.
-
-This particular loop only loops over 1:max_seed with given anomaly class.
-"""
-function point_cloud_experimental_loop2(sample_params_f, fit_f, edit_params_f, 
-	max_seed, modelname, dataset, contamination, savepath, anomaly_class, method)
-	# sample the random hyperparameters
-	parameters = sample_params_f()
-
-	# for the given number of seeds run the experiment
-	for seed in 1:max_seed
-		# with these hyperparameters, train and evaluate the model on different train/val/tst splits
-		# load data for either "MNIST_in" or "MNIST_out" and set the setting
-		# prepared for other point cloud datasets such as ModelNet10
-
-		# load data
-		data = load_data(dataset, anomaly_class_ind=anomaly_class, seed=seed, method=method, contamination=contamination)
-
-		# undersample data for leave-one-in and leave-one-out methods
-		if method == "leave-one-in"
-			data = GroupAD.leave_one_in(data; seed=seed)
-		elseif method == "leave-one-out"
-			data = GroupAD.leave_one_out(data; seed=seed)
-		else
-			error("This model can only run on point cloud datasets!")
-		end
-		
-		# define where data is going to be saved
-		_savepath = joinpath(savepath, "$(modelname)/$(dataset)/$(method)/class_index=$(class)/seed=$(seed)")
-		mkpath(_savepath)
-		
-		# edit parameters
-		edited_parameters = edit_params_f(data, parameters, anomaly_class, method)
-		
-		@info "Trying to fit $modelname on $(dataset) in $method setting.\nModel parameters: $(edited_parameters)..."
-		@info "Train/validation/test splits: $(size(data[1][1], 2)) | $(size(data[2][1], 2)) | $(size(data[3][1], 2))"
-		@info "Number of features: $(size(data[1][1], 1))"
-
-		@info "Params check done. Trying to fit."
-		# fit
-		training_info, results = fit_f(data, edited_parameters)
-		
-		# save the model separately			
-		if training_info.model != nothing
-			modelf = joinpath(_savepath, savename("model", edited_parameters, "bson", digits=5))
-			tagsave(
-				modelf, 
-				Dict("model"=>training_info.model,
-					"fit_t"=>training_info.fit_t,
-					"history"=>training_info.history,
-					"parameters"=>edited_parameters
-					), 
-				safe = true)
-			(@info "Model saved to $modelf")
-
-			training_info = merge(training_info, (model = nothing, history=nothing))
-		end
-
-		# here define what additional info should be saved together with parameters, scores, labels and predict times
-		save_entries = merge(training_info, (modelname = modelname, seed = seed, dataset = dataset))
-
-		# now loop over all anomaly score funs
-		@time for result in results
-			if modelname in ["vae_instance", "statistician", "PoolModel"]
-				@info "Trying to save results..."
-				experiment_bag(result..., data, _savepath; save_entries...)
-			else
-				experiment(result..., data, _savepath; save_entries...)
-			end
-		end
-	end
-end
-
 
 """
 	toy_experimental_loop_toy(sample_params_f, fit_f, edit_params_f, 

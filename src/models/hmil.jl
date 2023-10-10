@@ -159,16 +159,16 @@ function fit_hmil!(model::Chain, data::Tuple, loss::Function;
 	ps = Flux.params(tr_model)
 	_patience = patience
 
-	best_val_loss = Inf
-	i = 1
-	start_time = time()
-
 	# prepare data
 	tr, vl = classification_data(data, na, seed)
 	train_data, train_labels = tr[1], Flux.onehotbatch(tr[2], [0,1])
 	val_data, val_labels = vl[1], Flux.onehotbatch(vl[2], [0,1])
     
 	lossf(x, y) = loss(tr_model, x, y)
+
+	best_val_loss = Inf
+	i = 1
+	start_time = time()
 
 	# infinite for loop via RandomBatches
 	for batch in RandomBatches(train_data, 1)
@@ -185,8 +185,13 @@ function fit_hmil!(model::Chain, data::Tuple, loss::Function;
 			# validation/early stopping
 			# val_loss = lossf(bag_batch) # mean(lossf.(val_x))
 			val_loss = lossf(val_data, val_labels)
+			train_loss = lossf(train_data, train_labels)
+
+			acc = mean(Flux.onecold(tr_model(train_data), [0,1]) .== Flux.onecold(train_labels, [0,1]))
 			
 			@info "$i - loss: $(batch_loss) (batch) | $(val_loss) (validation)"
+			@info "train loss: $train_loss"
+			@info "train accuracy: $acc"
 
 			if isnan(val_loss) || isnan(batch_loss)
 				error("Encountered invalid values in loss function.")
@@ -227,7 +232,7 @@ function hmil_basic_loop(sample_params_f, fit_f, edit_params_f,
 	# sample the random hyperparameters
 	parameters = sample_params_f()
 
-	for na in [100,10,20]
+	for na in [100,5,10,20]
 	# for na in 0
 		# with these hyperparameters, train and evaluate the model on different train/val/tst splits
 		for seed in 1:max_seed
@@ -282,11 +287,11 @@ function hmil_pc_loop(sample_params_f, fit_f, edit_params_f,
 	# sample the random hyperparameters
 	parameters = sample_params_f()
 
-	for na in [100,10,20]
+	Threads.@threads for na in [10, 20, 100]
 		# run over all classes with the same hyperparameters
 		# use more CPU cores for calculation
 		@info "Starting parallel process on $(Threads.nthreads()) cores (over $max_seed seeds)."
-		Threads.@threads for seed in 1:max_seed
+		for seed in 1:max_seed
 			# with these hyperparameters, train and evaluate the model on different train/val/tst splits
 			# load data for either "MNIST_in" or "MNIST_out" and set the setting
 			# prepared for other point cloud datasets such as ModelNet10
@@ -296,13 +301,24 @@ function hmil_pc_loop(sample_params_f, fit_f, edit_params_f,
 					data = GroupAD.leave_one_in(data; seed=seed)
 				elseif method == "leave-one-out"
 					data = GroupAD.leave_one_out(data; seed=seed)
+				elseif dataset == "modelnet"
+					# data = (
+					# 	(data[1][1], .!data[1][2]),
+					# 	(data[2][1], .!data[2][2]),
+					# 	(data[3][1], .!data[3][2])
+					# )
+					nothing
 				else
 					error("This model can only run on point cloud datasets!")
 				end
 				
 				# define where data is going to be saved
 				# _savepath = joinpath(savepath, "$(modelname)/$(dataset)/$(method)/class_index=$(class)/seed=$(seed)")
-				_savepath = joinpath(savepath, "$(modelname)/$(method)/class_index=$(class)/seed=$(seed)")
+				if dataset == "modelnet"
+					_savepath = joinpath(savepath, "$(modelname)/$(method)/seed=$(seed)")
+				else
+					_savepath = joinpath(savepath, "$(modelname)/$(method)/class_index=$(class)/seed=$(seed)")
+				end
 				mkpath(_savepath)
 				
 				# edit parameters

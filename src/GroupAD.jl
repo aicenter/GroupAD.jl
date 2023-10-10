@@ -19,6 +19,7 @@ using HDF5
 export GenerativeModels
 
 include("data.jl")
+include("modelnet.jl")
 include("toy.jl")
 include("experiments.jl")
 include("experimental_loops.jl")
